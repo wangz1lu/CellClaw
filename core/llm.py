@@ -1,0 +1,472 @@
+"""
+OmicsClaw LLM Client — Native Function Calling
+================================================
+Uses OpenAI-compatible native function calling (tools parameter),
+NOT prompt-engineering hacks. DeepSeek, OpenAI, Qwen all support this.
+
+Native function calling:
+  - Model outputs {"tool_calls": [...]} in the assistant message
+  - We append {"role": "tool", "tool_call_id": ..., "content": result}
+  - Model continues planning based on results
+  - This is what the model was fine-tuned for — 10x better multi-step reasoning
+
+Env vars:
+    OMICS_LLM_BASE_URL   — API base URL (default: https://api.deepseek.com/v1)
+    OMICS_LLM_API_KEY    — API key
+    OMICS_LLM_MODEL      — Model name (default: deepseek-chat)
+    OMICS_LLM_MAX_TOKENS — Max response tokens (default: 4096)
+    OMICS_LLM_PROXY      — HTTP proxy
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import os
+import re
+from pathlib import Path
+from typing import Optional, Callable, Awaitable, Any
+
+logger = logging.getLogger(__name__)
+
+_DEFAULT_BASE_URL  = "https://api.deepseek.com/v1"
+_DEFAULT_MODEL     = "deepseek-chat"
+_DEFAULT_MAX_TOKENS = 4096
+_DEFAULT_TIMEOUT   = 120
+
+# ── Tool Schemas (OpenAI function calling format) ─────────────────────────
+
+TOOL_SCHEMAS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "shell",
+            "description": "在远程服务器执行 bash 命令。用于文件操作、查看目录、运行脚本、管理 conda 环境、提交 SLURM 任务等。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "cmd": {
+                        "type": "string",
+                        "description": "要执行的 bash 命令。可用 && 连接多个命令一次执行。"
+                    }
+                },
+                "required": ["cmd"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "python",
+            "description": "在指定 conda 环境中执行 Python 代码片段。用于数据探索、快速计算、调用 scanpy/seurat 等。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "string",
+                        "description": "要执行的 Python 代码"
+                    },
+                    "conda_env": {
+                        "type": "string",
+                        "description": "conda 环境名称，默认使用当前激活的环境"
+                    }
+                },
+                "required": ["code"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "read_file",
+            "description": "读取远程服务器上的文件内容。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "文件的绝对或相对路径"
+                    }
+                },
+                "required": ["path"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "write_file",
+            "description": "在远程服务器上创建或覆盖写入文件。用于上传脚本、配置文件等。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "文件路径"
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "文件内容"
+                    }
+                },
+                "required": ["path", "content"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_dir",
+            "description": "列出远程服务器目录的内容。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "目录路径，默认为当前工作目录"
+                    }
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "read_skill",
+            "description": "读取本地 Skill 知识库（SKILL.md）或参考模板。在执行生信分析前必须先读取相关 Skill 了解标准流程。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "skill_id": {
+                        "type": "string",
+                        "description": "Skill 的 ID，如 ccc_cellchat。留空则列出所有可用 Skill。"
+                    },
+                    "template": {
+                        "type": "string",
+                        "description": "（可选）参考模板文件名，如 01_single_dataset_CCC.R。不提供则读取完整知识库 SKILL.md。"
+                    }
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "remember",
+            "description": "将重要信息永久写入用户的长期记忆。用于记录项目信息、分析步骤、解决方案、用户偏好等。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "content": {
+                        "type": "string",
+                        "description": "要记录的内容，简洁明了"
+                    },
+                    "section": {
+                        "type": "string",
+                        "description": "（可选）分类标题，如 '项目信息'、'分析流程'、'踩坑记录'"
+                    }
+                },
+                "required": ["content"]
+            }
+        }
+    }
+]
+
+# ── System Prompt (lean — no tool descriptions since they're in schemas) ───
+
+BASE_SYSTEM_PROMPT = """你是 OmicsClaw 🧬，一名专业的 AI 生物信息学工程师，驻扎在 Discord 中。
+
+你可以通过工具直接操控远程 Linux 服务器（HPC/工作站），执行真实命令、读写文件、运行分析。
+
+## 工作原则
+- 直接行动，不描述步骤——用户要"分析数据"，就真的去执行，不要说"你可以用xxx命令"
+- 遇到生信分析任务，先调用 read_skill 了解标准流程，再根据用户实际数据编写定制代码
+- 多步任务按顺序执行：探索数据 → 理解结构 → 编写脚本 → 执行 → 解读结果
+- 出错时分析原因并自动修复，不要中途放弃
+- 重要信息用 remember 工具记录，方便下次继续
+- 回复用用户相同语言（中文/英文）
+- 最终回复要简洁，重点说结论和用户需要知道的内容
+"""
+
+
+class ToolCall:
+    """Represents a single tool call from native function calling."""
+    def __init__(self, call_id: str, name: str, arguments: dict):
+        self.call_id   = call_id
+        self.name      = name       # function name
+        self.arguments = arguments  # parsed dict
+
+    # For backwards compatibility
+    @property
+    def tool(self):
+        return self.name
+
+    @property
+    def params(self):
+        return self.arguments
+
+    @classmethod
+    def from_api(cls, tc: dict) -> "ToolCall":
+        """Parse from OpenAI API tool_call object."""
+        fn   = tc.get("function", {})
+        name = fn.get("name", "")
+        try:
+            args = json.loads(fn.get("arguments", "{}"))
+        except json.JSONDecodeError:
+            args = {}
+        return cls(
+            call_id   = tc.get("id", ""),
+            name      = name,
+            arguments = args,
+        )
+
+
+# Type alias for the tool executor callback
+ToolExecutor = Callable[[ToolCall], Awaitable[str]]
+
+
+class LLMClient:
+    """
+    Async OpenAI-compatible LLM client with native Function Calling.
+    Supports any OpenAI-compatible API (DeepSeek, OpenAI, Kimi, Qwen).
+    """
+
+    def __init__(
+        self,
+        base_url:     Optional[str] = None,
+        api_key:      Optional[str] = None,
+        model:        Optional[str] = None,
+        max_tokens:   Optional[int] = None,
+        proxy:        Optional[str] = None,
+        project_root: Optional[str] = None,
+        skills_dir:   Optional[str] = None,
+    ):
+        self.base_url   = (base_url   or os.environ.get("OMICS_LLM_BASE_URL",   _DEFAULT_BASE_URL)).rstrip("/")
+        self.api_key    = (api_key    or os.environ.get("OMICS_LLM_API_KEY",    "")).strip()
+        self.model      = (model      or os.environ.get("OMICS_LLM_MODEL",      _DEFAULT_MODEL)).strip()
+        self.max_tokens = int(max_tokens or os.environ.get("OMICS_LLM_MAX_TOKENS", _DEFAULT_MAX_TOKENS))
+        self.proxy      = (proxy or os.environ.get("OMICS_LLM_PROXY")
+                           or os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy"))
+
+        _root = project_root or str(Path(__file__).parent.parent)
+
+        from .skills import load_soul, SkillLoader
+        self._soul         = load_soul(_root)
+        _skills_path       = skills_dir or os.path.join(_root, "skills")
+        self._skill_loader = SkillLoader(_skills_path)
+
+        if not self.api_key:
+            logger.warning("OMICS_LLM_API_KEY not set — LLM features disabled")
+
+    @property
+    def enabled(self) -> bool:
+        return bool(self.api_key)
+
+    @property
+    def skill_loader(self):
+        return self._skill_loader
+
+    def build_system_prompt(self, session_ctx: Optional[str] = None) -> str:
+        """Build system prompt: soul identity + base rules + skills list + session context."""
+        parts = []
+
+        # Soul identity (first 400 chars — personality summary)
+        if self._soul:
+            parts.append(self._soul[:400].strip())
+
+        # Base rules
+        parts.append(BASE_SYSTEM_PROMPT)
+
+        # Skills awareness (compact — full content loaded via read_skill tool)
+        skill_section = self._skill_loader.build_prompt_section()
+        parts.append(skill_section)
+
+        # Runtime context (server, env, path, memory)
+        if session_ctx:
+            parts.append(f"## 当前会话上下文\n{session_ctx}")
+
+        return "\n\n".join(parts)
+
+    # ── Low-level API call ────────────────────────────────────────────────
+
+    async def _call_api(
+        self,
+        messages:    list[dict],
+        tools:       Optional[list] = None,
+        max_tokens:  Optional[int]  = None,
+        temperature: float = 0.3,
+    ) -> dict:
+        """
+        Raw API call. Returns the full assistant message dict.
+        Raises on HTTP errors.
+        """
+        if not self.enabled:
+            return {"role": "assistant", "content": "[LLM disabled: no API key]"}
+
+        payload: dict[str, Any] = {
+            "model":       self.model,
+            "messages":    messages,
+            "max_tokens":  max_tokens or self.max_tokens,
+            "temperature": temperature,
+        }
+        if tools:
+            payload["tools"]       = tools
+            payload["tool_choice"] = "auto"
+
+        import aiohttp
+        import ssl as _ssl
+
+        ssl_ctx   = _ssl._create_unverified_context()
+        connector = aiohttp.TCPConnector(ssl=ssl_ctx)
+        timeout   = aiohttp.ClientTimeout(total=_DEFAULT_TIMEOUT)
+        headers   = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type":  "application/json",
+        }
+        kwargs: dict = {"headers": headers, "json": payload}
+        if self.proxy:
+            kwargs["proxy"] = self.proxy
+
+        try:
+            async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+                async with session.post(f"{self.base_url}/chat/completions", **kwargs) as resp:
+                    if resp.status != 200:
+                        body = await resp.text()
+                        logger.error(f"LLM API {resp.status}: {body[:300]}")
+                        return {"role": "assistant", "content": f"[LLM error {resp.status}]"}
+                    data  = await resp.json()
+                    return data["choices"][0]["message"]
+        except asyncio.TimeoutError:
+            logger.error("LLM API timeout")
+            return {"role": "assistant", "content": "[LLM timeout]"}
+        except Exception as e:
+            logger.exception(f"LLM API error: {e}")
+            return {"role": "assistant", "content": f"[LLM error: {e}]"}
+
+    # ── Agent Loop (Native Function Calling) ─────────────────────────────
+
+    async def agent_chat(
+        self,
+        user_message:  str,
+        tool_executor: ToolExecutor,
+        session_ctx:   Optional[str]       = None,
+        history:       Optional[list[dict]] = None,
+        max_rounds:    int = 15,
+    ) -> str:
+        """
+        Multi-turn agent loop using NATIVE function calling.
+
+        The model outputs tool_calls in the assistant message (no text parsing needed).
+        We execute each tool and feed results back as tool-role messages.
+        Loop continues until model outputs a text-only response (task complete).
+
+        Args:
+            user_message:  User's natural language request
+            tool_executor: Async callback that executes a ToolCall and returns result string
+            session_ctx:   Current session context (server, env, path, memory, skills)
+            history:       Recent conversation history (list of message dicts)
+            max_rounds:    Max tool call rounds before forced summary
+        """
+        system = self.build_system_prompt(session_ctx)
+
+        messages: list[dict] = [{"role": "system", "content": system}]
+
+        # Inject recent history (max 6 turns to keep token budget reasonable)
+        if history:
+            messages.extend(history[-6:])
+
+        messages.append({"role": "user", "content": user_message})
+
+        for round_n in range(max_rounds):
+            # Call API with tool schemas
+            assistant_msg = await self._call_api(messages, tools=TOOL_SCHEMAS)
+
+            content    = assistant_msg.get("content") or ""
+            tool_calls = assistant_msg.get("tool_calls") or []
+
+            # No tool calls → final answer
+            if not tool_calls:
+                return content or "[无响应]"
+
+            # Has tool calls → execute each one
+            logger.info(f"[Agent] round={round_n+1} tool_calls={[tc['function']['name'] for tc in tool_calls]}")
+
+            # Append assistant message with tool_calls to history
+            messages.append(assistant_msg)
+
+            # Execute all tool calls (sequential)
+            for tc_raw in tool_calls:
+                tc     = ToolCall.from_api(tc_raw)
+                logger.info(f"  → {tc.name}({json.dumps(tc.arguments, ensure_ascii=False)[:120]})")
+
+                try:
+                    result = await tool_executor(tc)
+                except Exception as e:
+                    result = f"[Tool error: {e}]"
+                    logger.exception(f"Tool execution failed: {tc.name}")
+
+                # Truncate large outputs
+                if len(result) > 3000:
+                    result = result[:3000] + f"\n...(输出过长，已截断，共{len(result)}字符)"
+
+                logger.info(f"  ← {tc.name}: {result[:100]!r}")
+
+                # Append tool result
+                messages.append({
+                    "role":         "tool",
+                    "tool_call_id": tc.call_id,
+                    "content":      result,
+                })
+
+        # Max rounds reached — ask model to summarize
+        messages.append({
+            "role":    "user",
+            "content": "请根据上面所有工具执行结果，给用户一个完整的总结回复。"
+        })
+        final_msg = await self._call_api(messages)
+        return final_msg.get("content") or "⚠️ 任务已执行，但未能生成最终回复，请查看操作日志。"
+
+    # ── Plain chat (no tools) ─────────────────────────────────────────────
+
+    async def chat(
+        self,
+        user_message: str,
+        system:       Optional[str] = None,
+        history:      Optional[list[dict]] = None,
+        max_tokens:   Optional[int] = None,
+    ) -> str:
+        """Simple chat without tool calling (for summarize/explain)."""
+        _sys = system or "你是 OmicsClaw，专业生信 AI 助手。回复简洁专业，使用用户相同语言。"
+        msgs = [{"role": "system", "content": _sys}]
+        if history:
+            msgs.extend(history[-4:])
+        msgs.append({"role": "user", "content": user_message})
+        msg = await self._call_api(msgs, max_tokens=max_tokens)
+        return msg.get("content") or ""
+
+    # ── Convenience methods ───────────────────────────────────────────────
+
+    async def summarize_result(self, result: str, task: str) -> str:
+        """Summarize a command/analysis result for the user."""
+        prompt = f"任务：{task}\n\n执行结果：\n{result[:3000]}\n\n请用中文简洁总结关键发现，重点说明对用户有意义的信息。"
+        return await self.chat(prompt)
+
+    async def explain_error(self, error: str, context: str = "") -> str:
+        """Explain an error and suggest a fix."""
+        prompt = f"执行报错如下：\n{error[:2000]}\n\n上下文：{context[:500]}\n\n请分析错误原因，给出简洁的修复建议。"
+        return await self.chat(prompt)
+
+
+# ── Singleton ─────────────────────────────────────────────────────────────
+
+_instance: Optional[LLMClient] = None
+
+
+def get_llm_client() -> LLMClient:
+    global _instance
+    if _instance is None:
+        _instance = LLMClient()
+    return _instance

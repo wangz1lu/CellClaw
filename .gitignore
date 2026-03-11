@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+venv/
+env/
+.venv/
+.env.local
+
+# Environment & secrets — NEVER commit these
+.env
+*.pem
+*.key
+*.p12
+
+# User data — contains server configs, SSH credentials, user memory
+data/sessions/
+data/users/
+data/vault/
+data/registry/
+data/*.json
+data/.*
+
+# Bot runtime
+/tmp/omicsclaw_*.log
+/tmp/omicsclaw_*.pid
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Test artifacts
+.pytest_cache/
+htmlcov/
+.coverage

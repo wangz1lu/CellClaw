@@ -1,0 +1,18 @@
+# OmicsClaw — Bot Runtime Dependencies
+# Install: pip install -r requirements.txt
+
+# Discord bot
+discord.py>=2.3.0
+
+# SSH remote execution
+asyncssh>=2.14.0
+
+# HTTP client (LLM API calls)
+aiohttp>=3.9.0
+
+# Config / YAML parsing
+pyyaml>=6.0
+python-dotenv>=1.0.0
+
+# Credential encryption (SSH password vault)
+cryptography>=41.0.0
