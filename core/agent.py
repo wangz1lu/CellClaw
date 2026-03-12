@@ -719,6 +719,21 @@ class OmicsClawAgent:
             if name == "remember":
                 return self._tool_remember(args, mem, tool_log)
 
+            # switch_env: update session state (same as /env use)
+            if name == "switch_env":
+                env_name = args.get("env_name", "").strip()
+                if not env_name:
+                    return "❌ switch_env 缺少 env_name 参数"
+                try:
+                    msg = await self._ssh.set_active_env(discord_user_id, env_name)
+                    # Refresh local conda_env so subsequent tool calls use new env
+                    nonlocal conda_env
+                    conda_env = env_name
+                    tool_log.append(f"switch_env: {env_name}")
+                    return f"✅ 已切换到 conda 环境: `{env_name}`\n{msg}"
+                except Exception as e:
+                    return f"❌ 切换环境失败: {e}"
+
             # All other tools need an active server
             if not server_id:
                 return "❌ 未连接服务器，请先执行 /server use <name>"
@@ -799,6 +814,39 @@ class OmicsClawAgent:
                 out    = result.stdout or result.stderr or "(空目录)"
                 tool_log.append(f"list_dir: {path}")
                 return out
+
+            elif name == "submit_job":
+                script_path = args.get("script_path", "")
+                description = args.get("description", "分析任务")
+                if not script_path:
+                    return "❌ submit_job 缺少 script_path 参数"
+                # Determine script type
+                if script_path.endswith(".R") or script_path.endswith(".r"):
+                    run_cmd = f"Rscript {script_path}"
+                elif script_path.endswith(".py"):
+                    run_cmd = f"python {script_path}"
+                elif script_path.endswith(".sh"):
+                    run_cmd = f"bash {script_path}"
+                else:
+                    run_cmd = f"bash {script_path}"
+                try:
+                    job = await self._ssh.submit_background(
+                        discord_user_id, run_cmd,
+                        description=description,
+                        conda_env=conda_env,
+                        workdir=workdir,
+                    )
+                    tool_log.append(f"submit_job: {job.job_id} — {description}")
+                    return (
+                        f"✅ 任务已提交后台运行\n"
+                        f"任务 ID: `{job.job_id}`\n"
+                        f"描述: {description}\n"
+                        f"日志: `{job.log_path}`\n"
+                        f"查看进度: `/job status {job.job_id}`\n"
+                        f"查看日志: `/job log {job.job_id}`"
+                    )
+                except Exception as e:
+                    return f"❌ 任务提交失败: {e}"
 
             else:
                 return f"❌ 未知工具: {name}"

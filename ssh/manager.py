@@ -251,6 +251,64 @@ class SSHManager:
         conn = await self._get_conn(discord_user_id, job.server_id)
         return await self._executor.poll_job(conn, job)
 
+    async def submit_background(
+        self,
+        discord_user_id: str,
+        run_cmd: str,
+        description: str = "分析任务",
+        conda_env: Optional[str] = None,
+        workdir: Optional[str] = None,
+        server_id: Optional[str] = None,
+    ) -> "RemoteJob":
+        """Submit an already-written script file as a background nohup job.
+
+        Unlike submit_analysis (which takes script content), this takes a
+        shell command like 'Rscript /path/to/analyze.R' and runs it via
+        nohup in a tmux session so the user can track it with /job commands.
+        """
+        import secrets
+        from ssh.models import RemoteJob, JobStatus
+
+        conn = await self._get_conn(discord_user_id, server_id)
+        session = self._registry.get_session(discord_user_id)
+        env = conda_env or session.active_conda_env
+        wd  = workdir or session.active_project_path or "~"
+
+        job_id   = secrets.token_hex(3)  # 6-char hex
+        log_path = f"{wd}/omics_job_{job_id}.log"
+        tmux_name = f"omics_{job_id}"
+
+        # Wrap command through executor for env/workdir handling
+        wrapped = self._executor._wrap_command(run_cmd, env, wd, conn=conn)
+        # Run in a detached tmux window with sentinels
+        sentinel_ok  = "OMICS_JOB_DONE"
+        sentinel_err = "OMICS_JOB_ERROR"
+        full_cmd = (
+            f"tmux new-session -d -s {tmux_name} "
+            f"'({wrapped}) > {log_path} 2>&1 && "
+            f"echo {sentinel_ok} >> {log_path} || "
+            f"echo {sentinel_err} >> {log_path}'"
+        )
+        result = await conn.run(full_cmd, timeout=15)
+        if result.exit_status != 0:
+            raise RuntimeError(f"tmux launch failed: {result.stderr}")
+
+        job = RemoteJob(
+            job_id          = job_id,
+            server_id       = conn.config.server_id,
+            discord_user_id = discord_user_id,
+            script_path     = run_cmd,
+            log_path        = log_path,
+            tmux_session    = tmux_name,
+            command         = run_cmd,
+            workdir         = wd,
+            conda_env       = env,
+            status          = JobStatus.RUNNING,
+        )
+        self._jobs[job_id] = job
+        logger.info(f"submit_background: job={job_id} cmd={run_cmd[:60]}")
+        return job
+
     async def get_job_log(self, job_id: str, discord_user_id: str,
                           tail: int = 50) -> str:
         job = self._jobs.get(job_id)

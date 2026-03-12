@@ -290,20 +290,21 @@ class RemoteExecutor:
                 # env's Rscript/python directly is more reliable.
                 conda_prefix = conda_bin.replace("/bin/conda", "").replace("/condabin/conda", "")
                 env_bin = f"{conda_prefix}/envs/{conda_env}/bin"
-                # Rewrite bare `Rscript` → absolute env path to avoid system fallback
+                # Rewrite bare `Rscript` / `python` → absolute env path
+                # Only match at start of token (not inside /path/to/Rscript)
                 patched_cmd = re.sub(
-                    r'(?<![/\w])Rscript\b',
+                    r'(^|(?<=\s)|(?<=&&\s)|(?<=;\s))Rscript(?=\s|$)',
                     f"{env_bin}/Rscript",
                     command
                 )
                 patched_cmd = re.sub(
-                    r'(?<![/\w])python3?\b',
+                    r'(^|(?<=\s)|(?<=&&\s)|(?<=;\s))python3?(?=\s|$)',
                     f"{env_bin}/python",
                     patched_cmd
                 )
-                # Also set R_LIBS_USER to ensure correct library path
+                # Set R_LIBS env vars so R finds packages in the conda env
                 env_r_libs = f"{conda_prefix}/envs/{conda_env}/lib/R/library"
-                env_setup = f'export R_LIBS_SITE="{env_r_libs}" && export R_LIBS_USER="{env_r_libs}"'
+                env_setup = f'export R_LIBS_SITE="{env_r_libs}" R_LIBS_USER="{env_r_libs}"'
                 parts.append(f"{env_setup} && {patched_cmd}")
             else:
                 logger.warning(f"conda_bin not found, running without env activation: {command[:60]}")
