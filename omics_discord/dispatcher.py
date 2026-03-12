@@ -136,9 +136,9 @@ class CommandDispatcher:
                 lines.append(f"  名称: {s.name}")
                 if s.scope:
                     lines.append(f"  适用: {s.scope}")
-                scripts = s.list_scripts()
+                scripts = s.list_templates()
                 if scripts:
-                    lines.append(f"  脚本: `{'`, `'.join(scripts)}`")
+                    lines.append(f"  模板: `{'`, `'.join(scripts)}`")
                 lines.append("")
             lines.append("用 `/skill info <id>` 查看详细知识库")
             return CommandResult.info("\n".join(lines))
@@ -171,7 +171,7 @@ class CommandDispatcher:
         /memory note <text> — manually write to MEMORY.md
         """
         from core.memory import MemoryManager
-        data_dir = os.environ.get("OMICSCLAW_DATA", str(Path(__file__).parent.parent.parent / "data"))
+        data_dir = os.environ.get("OMICSCLAW_DATA", str(Path(__file__).parent.parent / "data"))
         mem_mgr  = MemoryManager(data_dir)
         mem      = mem_mgr.get(discord_user_id)
 
@@ -221,7 +221,7 @@ class CommandDispatcher:
             "🧬 **OmicsClaw 命令帮助**\n\n"
             "**服务器管理**\n"
             "```\n"
-            "/server add  --name <id> --host <IP> --user <用户名> [--key <路径>]\n"
+            "/server add  --name <id> --host <IP> --user <用户名> --port <端口> [--key <路径>] [--password true]\n"
             "/server list\n"
             "/server use  <name>\n"
             "/server test [name]\n"
