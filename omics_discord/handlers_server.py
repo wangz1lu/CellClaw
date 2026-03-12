@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from ..ssh.manager import SSHManager
+from ssh.manager import SSHManager
 from .parser import ParsedCommand
 from .result import CommandResult
 

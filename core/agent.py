@@ -27,10 +27,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-from ..omics_discord.dispatcher import CommandDispatcher
-from ..omics_discord.result import CommandResult, ResultType
-from ..ssh.manager import SSHManager
-from ..ssh.models import JobStatus
+from omics_discord.dispatcher import CommandDispatcher
+from omics_discord.result import CommandResult, ResultType
+from ssh.manager import SSHManager
+from ssh.models import JobStatus
 from .nl_router import NLRouter
 from .code_generator import CodeGenerator
 from .llm import get_llm_client, ToolCall

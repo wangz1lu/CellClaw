@@ -21,7 +21,7 @@ import re
 import logging
 from typing import Optional
 
-from ..ssh.manager import SSHManager
+from ssh.manager import SSHManager
 from .llm import get_llm_client
 
 logger = logging.getLogger(__name__)

@@ -6,8 +6,8 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from ..ssh.manager import SSHManager
-from ..ssh.models import JobStatus
+from ssh.manager import SSHManager
+from ssh.models import JobStatus
 from .parser import ParsedCommand
 from .result import CommandResult
 

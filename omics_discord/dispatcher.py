@@ -19,7 +19,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from ..ssh.manager import SSHManager
+from ssh.manager import SSHManager
 from .parser import CommandParser, ParsedCommand
 from .result import CommandResult
 from .handlers_server import ServerCommandHandler
@@ -119,7 +119,7 @@ class CommandDispatcher:
         /skill list          — list all installed skills
         /skill info <id>     — show full SKILL.md for a skill
         """
-        from ..core.llm import get_llm_client
+        from core.llm import get_llm_client
         llm = get_llm_client()
         loader = llm.skill_loader
 
@@ -170,7 +170,7 @@ class CommandDispatcher:
         /memory clear      — clear conversation history
         /memory note <text> — manually write to MEMORY.md
         """
-        from ..core.memory import MemoryManager
+        from core.memory import MemoryManager
         data_dir = os.environ.get("OMICSCLAW_DATA", str(Path(__file__).parent.parent.parent / "data"))
         mem_mgr  = MemoryManager(data_dir)
         mem      = mem_mgr.get(discord_user_id)
