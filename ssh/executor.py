@@ -285,7 +285,26 @@ class RemoteExecutor:
         if conda_env:
             conda_bin = (getattr(conn, "conda_bin", "") or "").strip()
             if conda_bin:
-                parts.append(f"{conda_bin} run -n {conda_env} --no-capture-output {command}")
+                # Derive conda prefix and use env's direct binaries.
+                # conda run can sometimes leak system .libPaths in R; using the
+                # env's Rscript/python directly is more reliable.
+                conda_prefix = conda_bin.replace("/bin/conda", "").replace("/condabin/conda", "")
+                env_bin = f"{conda_prefix}/envs/{conda_env}/bin"
+                # Rewrite bare `Rscript` → absolute env path to avoid system fallback
+                patched_cmd = re.sub(
+                    r'(?<![/\w])Rscript\b',
+                    f"{env_bin}/Rscript",
+                    command
+                )
+                patched_cmd = re.sub(
+                    r'(?<![/\w])python3?\b',
+                    f"{env_bin}/python",
+                    patched_cmd
+                )
+                # Also set R_LIBS_USER to ensure correct library path
+                env_r_libs = f"{conda_prefix}/envs/{conda_env}/lib/R/library"
+                env_setup = f'export R_LIBS_SITE="{env_r_libs}" && export R_LIBS_USER="{env_r_libs}"'
+                parts.append(f"{env_setup} && {patched_cmd}")
             else:
                 logger.warning(f"conda_bin not found, running without env activation: {command[:60]}")
                 parts.append(command)
