@@ -34,7 +34,16 @@ fi
 
 # 检查 discord 模块是否可用
 if ! "$PYTHON" -c "import discord" 2>/dev/null; then
-    echo "❌ 缺少依赖，请先运行: bash install.sh"
+    echo ""
+    echo "❌ 缺少依赖包（discord 未安装）"
+    echo ""
+    echo "   请运行以下命令安装依赖："
+    echo "     bash install.sh"
+    echo ""
+    echo "   或手动安装："
+    echo "     source venv/bin/activate"
+    echo "     pip install -r requirements.txt"
+    echo ""
     exit 1
 fi
 
