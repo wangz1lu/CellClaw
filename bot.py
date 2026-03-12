@@ -23,7 +23,6 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
-import certifi
 import discord
 from discord.ext import tasks
 
@@ -36,13 +35,14 @@ logging.basicConfig(
 logger = logging.getLogger("omicsclaw.gateway")
 
 # ── Import Agent ───────────────────────────────────────────────────────────
-try:
-    from .core.agent import OmicsClawAgent, AgentResponse
-except ImportError:
-    # Fallback: running directly as `python bot.py` from OmicsClaw/ dir
-    import sys
-    sys.path.insert(0, str(Path(__file__).parent.parent))
-    from OmicsClaw.core.agent import OmicsClawAgent, AgentResponse
+import sys
+# Always add the project root to sys.path so imports work regardless of
+# how the script is invoked or what the parent directory is named.
+_PROJECT_ROOT = str(Path(__file__).parent)
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
+
+from core.agent import OmicsClawAgent, AgentResponse
 
 
 # ── Configuration ──────────────────────────────────────────────────────────
