@@ -39,7 +39,7 @@ OmicsClaw: 🧬 Reading skill knowledge base for cell-cell communication...
 ### Install
 
 ```bash
-git clone https://github.com/yourorg/omicsclaw
+git clone https://github.com/wangz1lu/omicsclaw
 cd omicsclaw
 bash install.sh
 ```
