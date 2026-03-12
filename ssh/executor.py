@@ -52,7 +52,7 @@ class RemoteExecutor:
         Run a command synchronously on the remote server.
         Wraps with conda activation and workdir cd if provided.
         """
-        full_cmd = self._wrap_command(command, conda_env, workdir)
+        full_cmd = self._wrap_command(command, conda_env, workdir, conn=conn)
         try:
             result = await conn.run(full_cmd, timeout=timeout)
             return ExecuteResult(
@@ -268,13 +268,27 @@ class RemoteExecutor:
         command: str,
         conda_env: Optional[str],
         workdir: Optional[str],
+        conn: Optional[object] = None,
     ) -> str:
+        # Strip any `conda activate ...` the LLM might have generated — we handle
+        # env activation ourselves via `conda run`. Leaving it in causes the
+        # activation to run inside the conda run subshell and the actual command
+        # to execute outside it (after &&), picking up the system-wide binary.
+        import re
+        command = re.sub(
+            r'\bconda\s+activate\s+\S+\s*(?:&&\s*)?', '', command
+        ).strip().lstrip('&').strip()
+
         parts = []
         if workdir:
             parts.append(f"cd {workdir}")
         if conda_env:
-            # conda run is cleaner than source activate in non-interactive shells
-            parts.append(f"conda run -n {conda_env} --no-capture-output {command}")
+            conda_bin = (getattr(conn, "conda_bin", "") or "").strip()
+            if conda_bin:
+                parts.append(f"{conda_bin} run -n {conda_env} --no-capture-output {command}")
+            else:
+                logger.warning(f"conda_bin not found, running without env activation: {command[:60]}")
+                parts.append(command)
         else:
             parts.append(command)
         return " && ".join(parts) if len(parts) > 1 else parts[0]

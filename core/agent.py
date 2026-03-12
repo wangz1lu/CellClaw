@@ -668,7 +668,7 @@ class OmicsClawAgent:
             if conda_env:
                 ctx_parts.append(f"当前 conda 环境: {conda_env}")
             if workdir:
-                ctx_parts.append(f"当前工作目录: {workdir}")
+                ctx_parts.append(f"当前工作目录: {workdir}（所有文件路径必须以此为基础使用绝对路径，例如 {workdir}/F7.rds）")
             if context_filepath:
                 ctx_parts.append(f"当前文件: {context_filepath}")
             if not server_id:
@@ -727,7 +727,7 @@ class OmicsClawAgent:
                 cmd = args.get("cmd", "")
                 if not cmd:
                     return "❌ shell 工具缺少 cmd 参数"
-                result = await self._ssh.run(discord_user_id, cmd, workdir=workdir)
+                result = await self._ssh.run(discord_user_id, cmd, conda_env=conda_env, workdir=workdir)
                 out = result.stdout or result.stderr or "(无输出)"
                 tool_log.append(f"shell: `{cmd[:60]}` → {out[:80]}")
                 return out
@@ -748,7 +748,7 @@ class OmicsClawAgent:
                 path = args.get("path", "")
                 if not path:
                     return "❌ read_file 工具缺少 path 参数"
-                result = await self._ssh.run(discord_user_id, f"cat '{path}'")
+                result = await self._ssh.run(discord_user_id, f"cat '{path}'", workdir=workdir)
                 out = result.stdout or result.stderr or "(空文件)"
                 if len(out) > 4000:
                     out = out[:4000] + f"\n...(已截断，共{len(out)}字符)"
@@ -758,8 +758,31 @@ class OmicsClawAgent:
             elif name == "write_file":
                 path    = args.get("path", "")
                 content = args.get("content", "")
+                # Fallback: if path missing but workdir known, use a default filename
                 if not path:
-                    return "❌ write_file 工具缺少 path 参数"
+                    if workdir:
+                        import hashlib, time
+                        ts = int(time.time()) % 10000
+                        path = f"{workdir}/omics_script_{ts}.R"
+                        logger.warning(f"write_file: path missing, using fallback: {path}")
+                    else:
+                        return "❌ write_file 工具缺少 path 参数，且当前工作目录未知"
+                if not content:
+                    return "❌ write_file 工具缺少 content 参数"
+
+                # ── Auto path hardening ──────────────────────────────────
+                # If workdir is known and content looks like R/Python script,
+                # inject setwd() at the top so relative paths inside the script work.
+                if workdir and content.strip():
+                    is_r_script = path.endswith(".R") or path.endswith(".r") or "library(" in content or "readRDS(" in content
+                    is_py_script = path.endswith(".py") or "import " in content
+                    if is_r_script and "setwd(" not in content:
+                        content = f'setwd("{workdir}")\n' + content
+                        logger.info(f"write_file: auto-injected setwd('{workdir}')")
+                    elif is_py_script and "os.chdir(" not in content and "chdir(" not in content:
+                        content = f'import os\nos.chdir("{workdir}")\n' + content
+                        logger.info(f"write_file: auto-injected os.chdir('{workdir}')")
+
                 cmd = (
                     f"mkdir -p \"$(dirname '{path}')\" && "
                     f"cat > '{path}' << 'OMICS_HEREDOC_EOF'\n{content}\nOMICS_HEREDOC_EOF"
@@ -772,7 +795,7 @@ class OmicsClawAgent:
 
             elif name == "list_dir":
                 path   = args.get("path", workdir or "~")
-                result = await self._ssh.run(discord_user_id, f"ls -lah '{path}'")
+                result = await self._ssh.run(discord_user_id, f"ls -lah '{path}'", workdir=workdir)
                 out    = result.stdout or result.stderr or "(空目录)"
                 tool_log.append(f"list_dir: {path}")
                 return out
@@ -781,8 +804,22 @@ class OmicsClawAgent:
                 return f"❌ 未知工具: {name}"
 
         # ── 6. Run agent loop (native function calling) ───────────────────
+        # Prepend session state to every user message so LLM never forgets
+        # the current server/env/workdir even after long history or compaction.
+        ctx_reminder = []
+        if server_id:
+            ctx_reminder.append(f"[当前服务器: {server_id}]")
+        if conda_env:
+            ctx_reminder.append(f"[当前conda环境: {conda_env}]")
+        if workdir:
+            ctx_reminder.append(f"[当前工作目录: {workdir}]")
+        augmented_message = (
+            " ".join(ctx_reminder) + "\n" + message
+            if ctx_reminder else message
+        )
+
         reply = await llm.agent_chat(
-            user_message  = message,
+            user_message  = augmented_message,
             tool_executor = execute_tool,
             session_ctx   = session_ctx or None,
             history       = history,

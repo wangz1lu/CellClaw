@@ -8,6 +8,7 @@ Automatically reconnects on stale connections.
 
 from __future__ import annotations
 import asyncio
+import os
 import logging
 from typing import Optional
 
@@ -192,37 +193,62 @@ class SSHConnectionManager:
 
 async def _probe_conda(raw_conn: asyncssh.SSHClientConnection) -> str:
     """
-    Probe the real conda binary path using a login shell.
-    Called once at connect time; result cached on SSHConnection.conda_bin.
-
-    asyncssh exec channels are non-interactive and don't source .bashrc,
-    so `which conda` fails in normal exec. A login shell (`bash --login`)
-    does source /etc/profile + ~/.bash_profile, which is where conda init
-    writes itself.
+    Probe the real conda binary path at connect time.
+    SSH exec channels are non-interactive — .bashrc is not sourced.
+    We try multiple strategies to find the conda binary.
     """
-    probe_cmd = "bash --login -c 'which conda 2>/dev/null || which mamba 2>/dev/null'"
+    # Strategy 1: login shell (sources /etc/profile + ~/.bash_profile)
+    for shell_cmd in [
+        "bash --login -c 'which conda 2>/dev/null || which mamba 2>/dev/null'",
+        "bash -lc 'which conda 2>/dev/null'",
+    ]:
+        try:
+            result = await asyncio.wait_for(raw_conn.run(shell_cmd, check=False), timeout=8)
+            path = (result.stdout or "").strip()
+            if path and "/" in path:
+                return path
+        except Exception:
+            pass
+
+    # Strategy 2: read conda path from .bashrc __conda_setup (bypass interactive guard)
+    read_bashrc_cmd = r"""python3 -c "
+import re, os
+try:
+    c = open(os.path.expanduser('~/.bashrc')).read()
+    m = re.search(r'[\"\'](/.+?/bin/conda)[\"\']\s', c)
+    if m: print(m.group(1))
+except: pass
+" 2>/dev/null"""
     try:
-        result = await asyncio.wait_for(
-            raw_conn.run(probe_cmd, check=False), timeout=10
-        )
+        result = await asyncio.wait_for(raw_conn.run(read_bashrc_cmd, check=False), timeout=8)
+        path = (result.stdout or "").strip()
+        if path and os.path.basename(path) == "conda":
+            return path
+    except Exception:
+        pass
+
+    # Strategy 3: broad find across common base paths
+    scan_cmd = (
+        "for p in "
+        "$HOME/miniconda3/bin/conda $HOME/miniconda/bin/conda "
+        "$HOME/anaconda3/bin/conda $HOME/anaconda/bin/conda "
+        "$HOME/miniforge3/bin/conda $HOME/mambaforge/bin/conda "
+        "/opt/conda/bin/conda /opt/miniconda3/bin/conda /opt/anaconda3/bin/conda "
+        "/usr/local/bin/conda /usr/bin/conda; "
+        "do [ -x \"$p\" ] && echo \"$p\" && break; done"
+    )
+    try:
+        result = await asyncio.wait_for(raw_conn.run(scan_cmd, check=False), timeout=10)
         path = (result.stdout or "").strip()
         if path:
             return path
     except Exception:
         pass
 
-    # Fallback: scan common install paths directly (no shell init needed)
-    scan_cmd = (
-        "for p in "
-        "~/miniconda3/bin/conda ~/anaconda3/bin/conda "
-        "~/miniforge3/bin/conda ~/mambaforge/bin/conda "
-        "/opt/conda/bin/conda /opt/miniconda3/bin/conda; do "
-        "[ -x \"$p\" ] && echo \"$p\" && break; done"
-    )
+    # Strategy 4: find conda anywhere under home (last resort, slow)
+    find_cmd = "find $HOME -maxdepth 6 -name conda -type f -perm /111 2>/dev/null | head -1"
     try:
-        result = await asyncio.wait_for(
-            raw_conn.run(scan_cmd, check=False), timeout=10
-        )
+        result = await asyncio.wait_for(raw_conn.run(find_cmd, check=False), timeout=15)
         path = (result.stdout or "").strip()
         if path:
             return path
