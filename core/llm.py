@@ -468,7 +468,7 @@ class LLMClient:
 
         ssl_ctx   = _ssl._create_unverified_context()
         connector = aiohttp.TCPConnector(ssl=ssl_ctx)
-        timeout   = aiohttp.ClientTimeout(total=_DEFAULT_TIMEOUT)
+        timeout   = aiohttp.ClientTimeout(total=_DEFAULT_TIMEOUT, connect=15)
         headers   = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type":  "application/json",
