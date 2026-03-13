@@ -32,8 +32,8 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_BASE_URL  = "https://api.deepseek.com/v1"
 _DEFAULT_MODEL     = "deepseek-chat"
-_DEFAULT_MAX_TOKENS = 8192
-_DEFAULT_TIMEOUT   = 120
+_DEFAULT_MAX_TOKENS = 16384
+_DEFAULT_TIMEOUT   = 300
 
 # ── Tool Schemas (OpenAI function calling format) ─────────────────────────
 
@@ -525,7 +525,7 @@ class LLMClient:
 
         # Inject recent history (max 6 turns to keep token budget reasonable)
         if history:
-            messages.extend(history[-6:])
+            messages.extend(history[-12:])
 
         # Build user message content — plain text or multimodal (text + images)
         if images:
