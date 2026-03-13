@@ -536,36 +536,44 @@ class OmicsClawAgent:
         The channel adapter must implement this callback;
         here we store it so the adapter can pick it up.
         """
-        figures = [f for f in local_files if f.endswith(".png")]
-        other = [f for f in local_files if not f.endswith(".png")]
+        IMAGE_EXTS  = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
+        ATTACH_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf", ".svg",
+                       ".csv", ".tsv", ".rds", ".h5ad"}
+
+        figures  = [f for f in local_files if Path(f).suffix.lower() in IMAGE_EXTS]
+        attached = [f for f in local_files if Path(f).suffix.lower() in ATTACH_EXTS]
+        # PDFs/CSVs etc that aren't inline images — also send as attachments
+        extra_attach = [f for f in attached if f not in figures]
 
         text = (
             f"✅ **任务 `{job_id}` 完成！**\n"
             f"<@{discord_user_id}>\n"
         )
         if figures:
-            text += f"📊 已生成 {len(figures)} 张图表（见附件）\n"
-        if other:
-            text += f"📄 其他结果文件：" + "\n".join(f"`{f}`" for f in other)
+            text += f"📊 已生成 {len(figures)} 张图表（见附件，直接预览）\n"
+        if extra_attach:
+            names = ", ".join(f"`{Path(f).name}`" for f in extra_attach)
+            text += f"📎 附件文件：{names}\n"
+        if not local_files:
+            text += "ℹ️ 未检测到 `result_*` 输出文件，请用 `/job log` 查看运行日志\n"
 
         # LLM summary: try to find a log/txt result and summarize
         llm = get_llm_client()
         if llm.enabled:
-            log_files = [f for f in local_files if f.endswith((".txt", ".log"))]
+            log_files = [f for f in local_files if Path(f).suffix.lower() in (".txt", ".log")]
             if log_files:
                 try:
-                    import aiofiles
-                    async with aiofiles.open(log_files[0]) as f:
-                        result_text = await f.read()
+                    with open(log_files[0]) as f:
+                        result_text = f.read()
                     summary = await llm.summarize_result(result_text)
                     if summary and not summary.startswith("[LLM"):
                         text += f"\n\n🤖 **AI 分析摘要：**\n{summary}"
                 except Exception as e:
                     logger.warning(f"LLM summary failed: {e}")
 
-        # Push to notification queue — the channel adapter polls this
+        # Push to notification queue — bot polls this every 5s
         self._pending_notifications[channel_id] = AgentResponse(
-            text=text, figures=figures
+            text=text, figures=figures + extra_attach
         )
 
     async def _notify_failed(

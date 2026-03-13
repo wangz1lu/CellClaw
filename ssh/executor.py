@@ -238,6 +238,9 @@ class RemoteExecutor:
         if not job.result_paths:
             return local_paths
 
+        # Ensure local download directory exists
+        Path(local_dir).mkdir(parents=True, exist_ok=True)
+
         sftp = await conn.sftp()
         for pattern in job.result_paths:
             # Expand globs on remote

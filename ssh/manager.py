@@ -304,6 +304,16 @@ class SSHManager:
             workdir         = wd,
             conda_env       = env,
             status          = JobStatus.RUNNING,
+            # Auto-collect common result file types from workdir on completion
+            result_paths    = [
+                f"{wd}/result_*.png",
+                f"{wd}/result_*.pdf",
+                f"{wd}/result_*.jpg",
+                f"{wd}/result_*.svg",
+                f"{wd}/result_*.csv",
+                f"{wd}/result_*.tsv",
+                f"{wd}/result_*.rds",
+            ],
         )
         self._jobs[job_id] = job
         logger.info(f"submit_background: job={job_id} cmd={run_cmd[:60]}")
