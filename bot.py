@@ -117,11 +117,16 @@ class OmicsClawBot(discord.Client):
 
         # ── Download attachments ─────────────────────────────────────────
         local_attachments: list[str] = []
+        image_attachments: list[str] = []   # image files for vision model
+        IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
+
         for att in message.attachments:
             dest = self._download_dir / att.filename
             try:
                 await att.save(dest)
                 local_attachments.append(str(dest))
+                if Path(att.filename).suffix.lower() in IMAGE_EXTS:
+                    image_attachments.append(str(dest))
                 logger.info(f"  Downloaded attachment: {att.filename} ({att.size} bytes)")
             except Exception as e:
                 logger.warning(f"  Failed to download {att.filename}: {e}")
@@ -133,6 +138,7 @@ class OmicsClawBot(discord.Client):
                     message=content,
                     discord_user_id=user_id,
                     attachments=local_attachments if local_attachments else None,
+                    images=image_attachments if image_attachments else None,
                     is_dm=is_dm,
                     channel_id=channel_id,
                 )

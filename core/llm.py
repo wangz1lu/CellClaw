@@ -259,6 +259,35 @@ BASE_SYSTEM_PROMPT = """你是 OmicsClaw 🧬，一名专业的 AI 生物信息�
 """
 
 
+def _build_multimodal_content(text: str, image_paths: list[str]) -> list[dict]:
+    """
+    Build an OpenAI-compatible multimodal content list.
+    Works with any vision-capable model (GPT-4o, Gemini via OpenAI compat, Qwen-VL, etc.)
+
+    Format:
+        [
+            {"type": "text", "text": "..."},
+            {"type": "image_url", "image_url": {"url": "data:image/png;base64,..."}},
+            ...
+        ]
+    """
+    import base64, mimetypes
+    content: list[dict] = [{"type": "text", "text": text}]
+    for path in image_paths:
+        try:
+            mime = mimetypes.guess_type(path)[0] or "image/png"
+            with open(path, "rb") as f:
+                b64 = base64.b64encode(f.read()).decode()
+            content.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:{mime};base64,{b64}"}
+            })
+            logger.debug(f"Attached image: {path} ({mime})")
+        except Exception as e:
+            logger.warning(f"Failed to encode image {path}: {e}")
+    return content
+
+
 def _recover_truncated_json(raw: str) -> dict:
     """
     Try to recover a truncated JSON string from DeepSeek API.
@@ -466,6 +495,7 @@ class LLMClient:
         session_ctx:   Optional[str]       = None,
         history:       Optional[list[dict]] = None,
         max_rounds:    int = 15,
+        images:        Optional[list[str]]  = None,
     ) -> str:
         """
         Multi-turn agent loop using NATIVE function calling.
@@ -480,6 +510,7 @@ class LLMClient:
             session_ctx:   Current session context (server, env, path, memory, skills)
             history:       Recent conversation history (list of message dicts)
             max_rounds:    Max tool call rounds before forced summary
+            images:        Local image file paths for vision-capable models
         """
         system = self.build_system_prompt(session_ctx)
 
@@ -489,7 +520,12 @@ class LLMClient:
         if history:
             messages.extend(history[-6:])
 
-        messages.append({"role": "user", "content": user_message})
+        # Build user message content — plain text or multimodal (text + images)
+        if images:
+            user_content = _build_multimodal_content(user_message, images)
+        else:
+            user_content = user_message
+        messages.append({"role": "user", "content": user_content})
 
         for round_n in range(max_rounds):
             # Call API with tool schemas

@@ -96,6 +96,7 @@ class OmicsClawAgent:
         message: str,
         discord_user_id: str,
         attachments: Optional[list[str]] = None,
+        images: Optional[list[str]] = None,
         is_dm: bool = False,
         channel_id: Optional[str] = None,
     ) -> AgentResponse:
@@ -106,13 +107,18 @@ class OmicsClawAgent:
             message:          Raw message text
             discord_user_id:  Discord user snowflake ID
             attachments:      List of local file paths (already downloaded)
+            images:           List of local image file paths for vision model
             is_dm:            Whether this is a DM (affects password collection)
             channel_id:       Source channel (for job completion notifications)
         """
-        # 1. Handle file uploads first
-        if attachments:
-            upload_response = await self._handle_uploads(attachments, discord_user_id)
-            if upload_response:
+        # 1. Handle file uploads first (non-image files)
+        non_image_attachments = [
+            p for p in (attachments or [])
+            if p not in (images or [])
+        ]
+        if non_image_attachments:
+            upload_response = await self._handle_uploads(non_image_attachments, discord_user_id)
+            if upload_response and not images:
                 return upload_response
 
         # 2. Try slash command dispatcher
@@ -131,8 +137,8 @@ class OmicsClawAgent:
         # Persist user message
         session.add({"role": "user", "content": message})
 
-        # Run agent
-        response = await self._handle_nl(message, discord_user_id, channel_id)
+        # Run agent (pass images for vision-capable models)
+        response = await self._handle_nl(message, discord_user_id, channel_id, images=images)
 
         # Persist assistant reply
         if response.text:
@@ -194,12 +200,13 @@ class OmicsClawAgent:
         message: str,
         discord_user_id: str,
         channel_id: Optional[str],
+        images: Optional[list[str]] = None,
     ) -> AgentResponse:
         """
         All natural language messages go directly to LLM Agent.
         The LLM decides what tools to call (shell/python/read_file/write_file/list_dir).
         """
-        return await self._handle_llm_chat(message, discord_user_id, channel_id=channel_id)
+        return await self._handle_llm_chat(message, discord_user_id, channel_id=channel_id, images=images)
 
         # ── Quick query (synchronous) ──────────────────────────────────
         if action == "query":
@@ -638,6 +645,7 @@ class OmicsClawAgent:
         discord_user_id: str,
         context_filepath: Optional[str] = None,
         channel_id: Optional[str] = None,
+        images: Optional[list[str]] = None,
     ) -> AgentResponse:
         """
         Agent mode with native function calling + persistent session history.
@@ -874,6 +882,7 @@ class OmicsClawAgent:
             session_ctx   = session_ctx or None,
             history       = history,
             max_rounds    = 15,
+            images        = images,
         )
 
         if not reply or reply.startswith("[LLM"):
