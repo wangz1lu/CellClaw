@@ -2,7 +2,7 @@
 name: DEG — 差异基因分析
 version: 1.0.0
 scope: 单细胞差异表达分析（两组比较 / 多组比较）
-languages: [R]
+languages: [R, Python]
 triggers: [deg, dge, differential expression, 差异基因, findmarkers, mast, wilcox, t test, 比较基因]
 ---
 # Skill: DEG — 差异基因分析

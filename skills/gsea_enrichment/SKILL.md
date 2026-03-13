@@ -2,7 +2,7 @@
 name: GSEA — GO/KEGG 富集分析
 version: 1.0.0
 scope: 差异基因的功能富集分析（GO, KEGG, Reactome, msigDB）
-languages: [R]
+languages: [R, Python]
 triggers: [gsea, go, kegg, enrichment, 富集, goenrich,ORA, overrepresentation, pathway, do, enrichr]
 ---
 # Skill: GSEA — GO/KEGG 富集分析

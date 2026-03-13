@@ -2,7 +2,7 @@
 name: Batch — 批次校正
 version: 1.0.0
 scope: 多批次单细胞数据整合与批次效应校正（Harmony / CCA / scVI / Seurat integration）
-languages: [R]
+languages: [R, Python]
 triggers: [harmony, batch, integration, 批次, 校正, harmony integration, seurat integration, mnn, combat, scvi]
 ---
 # Skill: Batch — 批次校正

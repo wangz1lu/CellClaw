@@ -2,7 +2,7 @@
 name: DimReduc — 标准降维聚类
 version: 1.0.0
 scope: 单细胞标准分析流程（归一化 → PCA → UMAP/tSNE → Clustering）
-languages: [R]
+languages: [R, Python]
 triggers: [umap, tsne, pca, clustering, 降维, 聚类, findclusters, louvain, leiden, seurat workflow]
 ---
 # Skill: DimReduc — 标准降维聚类
