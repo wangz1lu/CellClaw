@@ -166,15 +166,9 @@ class RemoteExecutor:
         """
         Check the current status of a background job.
         Updates job.status in-place and returns the job.
+        Supports both tmux-based and nohup-based jobs.
         """
-        # Check if tmux session still exists
-        tmux_check = await conn.run(
-            f"tmux has-session -t {job.tmux_session} 2>/dev/null && echo alive || echo dead",
-            timeout=10
-        )
-        tmux_alive = "alive" in tmux_check.stdout
-
-        # Check log for sentinels
+        # Check log for sentinels first (works for both tmux and nohup)
         log_tail = await conn.run(f"tail -5 {job.log_path} 2>/dev/null", timeout=10)
         log_text = log_tail.stdout
 
@@ -185,19 +179,32 @@ class RemoteExecutor:
         elif _JOB_ERROR_SENTINEL in log_text:
             job.status = JobStatus.FAILED
             job.finished_at = datetime.now()
-            # Extract error summary
             err_check = await conn.run(
                 f"grep -A5 'Traceback\|Error\|{_JOB_ERROR_SENTINEL}' {job.log_path} "
                 f"| tail -10", timeout=10
             )
             job.error_summary = err_check.stdout.strip()
-        elif not tmux_alive:
-            # tmux died but no sentinel → unexpected crash
-            job.status = JobStatus.FAILED
-            job.finished_at = datetime.now()
-            job.error_summary = "进程意外退出（无错误信息）"
         else:
-            job.status = JobStatus.RUNNING
+            # No sentinel yet — check if process is still running
+            # Try tmux first; if not found, check if log file is still being written to
+            tmux_check = await conn.run(
+                f"tmux has-session -t {job.tmux_session} 2>/dev/null && echo alive || echo dead",
+                timeout=10
+            )
+            if "alive" in tmux_check.stdout:
+                job.status = JobStatus.RUNNING
+            else:
+                # tmux not used or session already closed — check if nohup process alive
+                # via log file existence + no sentinel = still running (log not yet flushed)
+                log_exists = await conn.run(
+                    f"test -f {job.log_path} && echo yes || echo no", timeout=10
+                )
+                if "yes" in log_exists.stdout:
+                    # Log exists but no sentinel yet — still running
+                    job.status = JobStatus.RUNNING
+                else:
+                    job.status = JobStatus.FAILED
+                    job.error_summary = "进程意外退出（日志文件不存在）"
 
         return job
 
