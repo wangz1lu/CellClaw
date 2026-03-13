@@ -149,6 +149,16 @@ class OmicsClawBot(discord.Client):
         if response.text or response.figures:
             await self._send_response(message.channel, response, message)
 
+        # ── Start job polling if a background job was submitted ──────────
+        if response.job_id and response.poll_secs > 0:
+            self.agent._start_polling(
+                job_id=response.job_id,
+                discord_user_id=user_id,
+                channel_id=channel_id,
+                interval=response.poll_secs,
+            )
+            logger.info(f"Started polling job {response.job_id} every {response.poll_secs}s → channel {channel_id}")
+
     # ── Response renderer ────────────────────────────────────────────────
 
     async def _send_response(

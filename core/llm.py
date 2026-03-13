@@ -509,6 +509,7 @@ class LLMClient:
             messages.append(assistant_msg)
 
             # Execute all tool calls (sequential)
+            job_submitted = False
             for tc_raw in tool_calls:
                 tc = ToolCall.from_api(tc_raw)
                 raw_args_str = tc_raw.get("function", {}).get("arguments", "")
@@ -535,6 +536,19 @@ class LLMClient:
                     "tool_call_id": tc.call_id,
                     "content":      result,
                 })
+
+                if tc.name == "submit_job":
+                    job_submitted = True
+
+            # submit_job was called → do one final LLM turn to compose reply, then stop immediately
+            # This prevents the agent from hanging waiting for the long-running job to finish
+            if job_submitted:
+                messages.append({
+                    "role":    "user",
+                    "content": "任务已成功提交后台。请直接告诉用户：任务已提交、任务ID是什么、如何用 /job status 查看进度。不要再调用任何工具。"
+                })
+                final_msg = await self._call_api(messages)
+                return final_msg.get("content") or "✅ 任务已提交后台运行，用 `/job status <id>` 查看进度。"
 
         # Max rounds reached — ask model to summarize
         messages.append({

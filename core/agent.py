@@ -199,7 +199,7 @@ class OmicsClawAgent:
         All natural language messages go directly to LLM Agent.
         The LLM decides what tools to call (shell/python/read_file/write_file/list_dir).
         """
-        return await self._handle_llm_chat(message, discord_user_id)
+        return await self._handle_llm_chat(message, discord_user_id, channel_id=channel_id)
 
         # ── Quick query (synchronous) ──────────────────────────────────
         if action == "query":
@@ -232,12 +232,13 @@ class OmicsClawAgent:
                 params.get("message", message),
                 discord_user_id,
                 context_filepath=params.get("filepath"),
+                channel_id=channel_id,
             )
 
         else:
             llm = get_llm_client()
             if llm.enabled:
-                return await self._handle_llm_chat(message, discord_user_id)
+                return await self._handle_llm_chat(message, discord_user_id, channel_id=channel_id)
             return AgentResponse(
                 text=(
                     "🧬 我理解你想做生信分析！请告诉我更多细节，例如：\n"
@@ -636,6 +637,7 @@ class OmicsClawAgent:
         message: str,
         discord_user_id: str,
         context_filepath: Optional[str] = None,
+        channel_id: Optional[str] = None,
     ) -> AgentResponse:
         """
         Agent mode with native function calling + persistent session history.
@@ -879,13 +881,28 @@ class OmicsClawAgent:
 
         # ── 7. Persist tool calls to session JSONL ────────────────────────
         if tool_log:
-            # Log to daily memory file
             mem.log(
                 f"**问**: {message[:80]}\n"
                 f"**操作**: {'; '.join(tool_log[:5])}\n"
                 f"**答**: {reply[:150]}",
                 "Agent操作"
             )
+
+        # ── 8. If a background job was submitted, start polling ───────────
+        submitted_job_id = None
+        for entry in tool_log:
+            if entry.startswith("submit_job: "):
+                # format: "submit_job: <job_id> — <desc>"
+                submitted_job_id = entry.split(": ", 1)[1].split(" ")[0]
+                break
+        if submitted_job_id and channel_id:
+            self._start_polling(
+                job_id=submitted_job_id,
+                discord_user_id=discord_user_id,
+                channel_id=channel_id,
+                interval=30,
+            )
+            logger.info(f"Auto-started polling for job {submitted_job_id} → channel {channel_id}")
 
         return AgentResponse(text=reply)
 
