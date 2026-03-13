@@ -132,35 +132,73 @@ class CommandDispatcher:
                 return CommandResult.info("📭 暂无已安装的 Skill。")
             lines = ["🔬 **已安装的分析 Skill**\n"]
             for s in skills:
-                lines.append(f"**{s.skill_id}**")
-                lines.append(f"  名称: {s.name}")
+                lines.append(f"**ID: `{s.skill_id}`** — {s.name}")
                 if s.scope:
-                    lines.append(f"  适用: {s.scope}")
+                    lines.append(f"  适用场景: {s.scope}")
+                if s.triggers:
+                    lines.append(f"  触发词: {', '.join(s.triggers[:5])}")
                 scripts = s.list_templates()
                 if scripts:
-                    lines.append(f"  模板: `{'`, `'.join(scripts)}`")
+                    lines.append(f"  模板脚本: `{'`, `'.join(scripts)}`")
                 lines.append("")
-            lines.append("用 `/skill info <id>` 查看详细知识库")
+            lines.append("─────────────────")
+            lines.append("📌 **使用方式：**")
+            lines.append("`/skill info <id>` — 查看完整知识库")
+            lines.append("`/skill use <id> <你的需求>` — 直接让 Agent 用此 Skill 分析")
+            lines.append('**自然语言触发**：直接说"帮我跑细胞通讯"也会自动激活对应 Skill')
             return CommandResult.info("\n".join(lines))
 
         elif action == "info":
             if not skill_id:
-                return CommandResult.err("请指定 Skill ID：`/skill info <id>`\n用 `/skill list` 查看所有可用 Skill")
+                return CommandResult.err(
+                    "请指定 Skill ID：`/skill info <id>`\n"
+                    "用 `/skill list` 查看所有可用 Skill 及其 ID"
+                )
             skill = loader.get(skill_id)
             if not skill:
                 available = ", ".join(f"`{s}`" for s in loader.skill_ids())
-                return CommandResult.err(f"❌ 未找到 Skill: `{skill_id}`\n可用: {available or '无'}")
+                return CommandResult.err(f"❌ 未找到 Skill: `{skill_id}`\n可用 ID: {available or '无'}")
             content = skill.load_full()
-            # Discord has 2000 char limit — show first portion
             if len(content) > 1700:
-                content = content[:1700] + f"\n\n...(内容过长，共{len(skill.load_full())}字符，已截断)"
-            return CommandResult.info(f"📖 **Skill: {skill.name}**\n\n{content}")
+                content = content[:1700] + f"\n\n...(内容过长，共{len(content)}字符)\n用 `/skill use {skill_id} <需求>` 让 Agent 读取完整知识库并分析"
+            return CommandResult.info(f"📖 **Skill: {skill.name}** (`{skill_id}`)\n\n{content}")
+
+        elif action in ("use", "run"):
+            # /skill use <skill_id> <user request>
+            # Parse: first word after 'use' = skill_id, rest = task description
+            parts = skill_id.split(None, 1)
+            actual_id = parts[0] if parts else ""
+            user_task = parts[1] if len(parts) > 1 else ""
+
+            if not actual_id:
+                return CommandResult.err(
+                    "用法：`/skill use <id> <你的需求>`\n"
+                    "例如：`/skill use ccc_cellchat 帮我分析 F7.rds 的细胞通讯`\n"
+                    "用 `/skill list` 查看所有 Skill ID"
+                )
+            skill = loader.get(actual_id)
+            if not skill:
+                available = ", ".join(f"`{s}`" for s in loader.skill_ids())
+                return CommandResult.err(f"❌ 未找到 Skill: `{actual_id}`\n可用 ID: {available or '无'}")
+
+            if not user_task:
+                user_task = f"使用 {skill.name} 进行分析"
+
+            # Return a special CommandResult that tells the caller to route to LLM
+            # with skill forcibly injected into context
+            return CommandResult(
+                success=True,
+                text=None,  # signal: route to agent
+                extra={"force_skill_id": actual_id, "nl_message": user_task},
+            )
 
         else:
             return CommandResult.info(
                 "**Skill 命令：**\n"
-                "`/skill list` — 列出所有已安装的分析 Skill\n"
-                "`/skill info <id>` — 查看某个 Skill 的详细知识库"
+                "`/skill list` — 列出所有已安装的分析 Skill（含 ID）\n"
+                "`/skill info <id>` — 查看某个 Skill 的详细知识库\n"
+                "`/skill use <id> <需求>` — 强制激活 Skill 并让 Agent 执行\n\n"
+                '💡 **自然语言也可以自动触发 Skill**，说"帮我跑细胞通讯"无需显式命令'
             )
 
     async def _handle_memory_cmd(self, cmd: ParsedCommand, discord_user_id: str) -> CommandResult:

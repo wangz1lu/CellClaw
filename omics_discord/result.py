@@ -42,6 +42,7 @@ class CommandResult:
     dm_prompt: Optional[str] = None
     job_id: Optional[str] = None
     poll_interval: int = 30
+    extra: dict = field(default_factory=dict)   # arbitrary metadata (e.g. force_skill_id)
 
     @classmethod
     def ok(cls, text: str, figures: list[str] = None) -> "CommandResult":

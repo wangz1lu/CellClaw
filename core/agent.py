@@ -124,6 +124,13 @@ class OmicsClawAgent:
         # 2. Try slash command dispatcher
         cmd_result = await self._dispatcher.dispatch(message, discord_user_id, is_dm=is_dm)
         if cmd_result is not None:
+            # Special case: /skill use → route to LLM with forced skill injection
+            force_skill_id = (cmd_result.extra or {}).get("force_skill_id")
+            if force_skill_id:
+                nl_message = (cmd_result.extra or {}).get("nl_message", message)
+                return await self._handle_skill_use(
+                    nl_message, discord_user_id, force_skill_id, channel_id, images
+                )
             response = self._cmd_result_to_response(cmd_result, discord_user_id)
             return response
 
@@ -647,6 +654,48 @@ class OmicsClawAgent:
         except Exception as e:
             logger.warning(f"Compaction failed for {user_id}: {e}")
 
+    async def _handle_skill_use(
+        self,
+        message: str,
+        discord_user_id: str,
+        skill_id: str,
+        channel_id: Optional[str] = None,
+        images: Optional[list[str]] = None,
+    ) -> AgentResponse:
+        """
+        Handle `/skill use <id> <task>` — force-inject the full skill knowledge
+        into context and route directly to the LLM agent.
+        Unlike auto-inject (truncated to 2500 chars), this loads the FULL SKILL.md.
+        """
+        from core.llm import get_llm_client
+        llm = get_llm_client()
+        loader = llm.skill_loader
+        skill = loader.get(skill_id)
+        if not skill:
+            return AgentResponse(text=f"❌ Skill `{skill_id}` 未找到，用 `/skill list` 查看可用 Skill")
+
+        # Load full skill knowledge base
+        full_skill_md = skill.load_skill_md()
+        logger.info(f"Force-loading skill {skill_id} ({len(full_skill_md)} chars) for user {discord_user_id}")
+
+        # Persist user message
+        session = self._sessions.get(discord_user_id)
+        if session.needs_compaction():
+            await self._compact_session(discord_user_id, session)
+        session.add({"role": "user", "content": message})
+
+        response = await self._handle_llm_chat(
+            message,
+            discord_user_id,
+            channel_id=channel_id,
+            images=images,
+            forced_skill_md=full_skill_md,
+            forced_skill_id=skill_id,
+        )
+        if response.text:
+            session.add({"role": "assistant", "content": response.text})
+        return response
+
     async def _handle_llm_chat(
         self,
         message: str,
@@ -654,6 +703,8 @@ class OmicsClawAgent:
         context_filepath: Optional[str] = None,
         channel_id: Optional[str] = None,
         images: Optional[list[str]] = None,
+        forced_skill_md: Optional[str] = None,
+        forced_skill_id: Optional[str] = None,
     ) -> AgentResponse:
         """
         Agent mode with native function calling + persistent session history.
@@ -706,20 +757,31 @@ class OmicsClawAgent:
         if memory_ctx:
             session_ctx = (session_ctx + "\n\n" + memory_ctx) if session_ctx else memory_ctx
 
-        # ── 3. Auto-inject relevant skill knowledge ───────────────────────
+        # ── 3. Skill knowledge injection ─────────────────────────────────
         try:
-            loader          = llm.skill_loader
-            relevant_skills = loader.find_relevant(message)
-            if relevant_skills:
-                for skill in relevant_skills[:1]:  # inject at most 1 skill
-                    skill_content = skill.load_skill_md()
-                    if len(skill_content) > 2500:
-                        skill_content = skill_content[:2500] + "\n...(用 read_skill 获取完整内容)"
-                    skill_block = f"## 已加载 Skill: {skill.skill_id} — {skill.name}\n{skill_content}"
-                    session_ctx = (session_ctx + "\n\n" + skill_block) if session_ctx else skill_block
-                    logger.info(f"Auto-injected skill: {skill.skill_id}")
+            loader = llm.skill_loader
+            if forced_skill_md and forced_skill_id:
+                # /skill use: inject FULL skill knowledge, no truncation
+                skill_block = (
+                    f"## 🔬 强制加载 Skill: {forced_skill_id}\n"
+                    f"⚠️ 用户明确要求使用此 Skill，必须调用 read_skill 读取完整知识库后再编写代码。\n\n"
+                    f"{forced_skill_md}"
+                )
+                session_ctx = (session_ctx + "\n\n" + skill_block) if session_ctx else skill_block
+                logger.info(f"Force-injected full skill: {forced_skill_id} ({len(forced_skill_md)} chars)")
+            else:
+                # Auto-inject: match triggers, truncate to save tokens
+                relevant_skills = loader.find_relevant(message)
+                if relevant_skills:
+                    for skill in relevant_skills[:1]:
+                        skill_content = skill.load_skill_md()
+                        if len(skill_content) > 3000:
+                            skill_content = skill_content[:3000] + f"\n...(用 read_skill 工具获取完整内容，skill_id='{skill.skill_id}')"
+                        skill_block = f"## 已自动加载 Skill: {skill.skill_id} — {skill.name}\n{skill_content}"
+                        session_ctx = (session_ctx + "\n\n" + skill_block) if session_ctx else skill_block
+                        logger.info(f"Auto-injected skill: {skill.skill_id}")
         except Exception as e:
-            logger.warning(f"Skill auto-injection failed: {e}")
+            logger.warning(f"Skill injection failed: {e}")
 
         # ── 4. Load persistent conversation history ───────────────────────
         history = session.get_history(max_messages=16)
