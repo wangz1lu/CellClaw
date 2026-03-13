@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_BASE_URL  = "https://api.deepseek.com/v1"
 _DEFAULT_MODEL     = "deepseek-chat"
-_DEFAULT_MAX_TOKENS = 16384
+_DEFAULT_MAX_TOKENS = 8192
 _DEFAULT_TIMEOUT   = 300
 
 # ── Tool Schemas (OpenAI function calling format) ─────────────────────────
