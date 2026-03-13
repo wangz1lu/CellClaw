@@ -280,17 +280,30 @@ class SSHManager:
 
         # Wrap command through executor for env/workdir handling
         wrapped = self._executor._wrap_command(run_cmd, env, wd, conn=conn)
-        # Run in a detached tmux window with sentinels
         sentinel_ok  = "OMICS_JOB_DONE"
         sentinel_err = "OMICS_JOB_ERROR"
-        full_cmd = (
+
+        # Try tmux first; fall back to nohup if tmux is not installed
+        tmux_cmd = (
             f"tmux new-session -d -s {tmux_name} "
             f"'({wrapped}) > {log_path} 2>&1 && "
             f"echo {sentinel_ok} >> {log_path} || "
             f"echo {sentinel_err} >> {log_path}'"
         )
-        result = await conn.run(full_cmd, timeout=15)
-        if result.exit_status != 0:
+        result = await conn.run(tmux_cmd, timeout=15)
+        if result.exit_status != 0 and "not found" in (result.stderr or ""):
+            # tmux not available — fall back to nohup + setsid
+            logger.info(f"tmux not found on server, falling back to nohup for job {job_id}")
+            nohup_cmd = (
+                f"nohup bash -c '({wrapped}) > {log_path} 2>&1 && "
+                f"echo {sentinel_ok} >> {log_path} || "
+                f"echo {sentinel_err} >> {log_path}' "
+                f"</dev/null &"
+            )
+            result = await conn.run(nohup_cmd, timeout=15)
+            if result.exit_status != 0:
+                raise RuntimeError(f"nohup launch failed: {result.stderr}")
+        elif result.exit_status != 0:
             raise RuntimeError(f"tmux launch failed: {result.stderr}")
 
         job = RemoteJob(
