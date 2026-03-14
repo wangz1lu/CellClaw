@@ -517,14 +517,16 @@ class OmicsClawAgent:
                 local_files = await self._ssh.collect_job_results(
                     job_id, discord_user_id
                 )
+                # Store result files in job for /job status to show
+                job.result_files = local_files
                 await self._notify_done(
-                    job_id, discord_user_id, channel_id, local_files
+                    job_id, discord_user_id, channel_id, local_files, job.log_path
                 )
                 return
 
             elif job.status == JobStatus.FAILED:
                 await self._notify_failed(
-                    job_id, discord_user_id, channel_id, job.error_summary
+                    job_id, discord_user_id, channel_id, job.error_summary, job.log_path
                 )
                 return
 
@@ -537,48 +539,50 @@ class OmicsClawAgent:
         discord_user_id: str,
         channel_id: str,
         local_files: list[str],
+        log_path: str,
     ):
         """
         Notify a Discord channel that a job completed.
-        The channel adapter must implement this callback;
-        here we store it so the adapter can pick it up.
+        Shows actual file paths and generates summary from job log.
         """
         IMAGE_EXTS  = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
         ATTACH_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf", ".svg",
-                       ".csv", ".tsv", ".rds", ".h5ad"}
+                       ".csv", ".tsv", ".rds", ".h5ad", ".txt"}
 
         figures  = [f for f in local_files if Path(f).suffix.lower() in IMAGE_EXTS]
         attached = [f for f in local_files if Path(f).suffix.lower() in ATTACH_EXTS]
-        # PDFs/CSVs etc that aren't inline images — also send as attachments
         extra_attach = [f for f in attached if f not in figures]
 
-        text = (
-            f"✅ **任务 `{job_id}` 完成！**\n"
-            f"<@{discord_user_id}>\n"
-        )
+        text = f"✅ **任务 `{job_id}` 完成！**\n<@{discord_user_id}>\n\n"
+
+        # Show actual file paths
+        if local_files:
+            text += "📁 **结果文件：**\n"
+            for f in local_files:
+                text += f"  📄 `{f}`\n"
+        else:
+            text += "⚠️ 未生成任何结果文件\n"
+
         if figures:
-            text += f"📊 已生成 {len(figures)} 张图表（见附件，直接预览）\n"
+            text += f"\n📊 图表预览: {len(figures)} 张\n"
         if extra_attach:
-            names = ", ".join(f"`{Path(f).name}`" for f in extra_attach)
-            text += f"📎 附件文件：{names}\n"
-        if not local_files:
-            text += "ℹ️ 未检测到 `result_*` 输出文件，请用 `/job log` 查看运行日志\n"
+            text += f"📎 附件: {len(extra_attach)} 个\n"
 
-        # LLM summary: try to find a log/txt result and summarize
+        # Generate summary from job log
         llm = get_llm_client()
-        if llm.enabled:
-            log_files = [f for f in local_files if Path(f).suffix.lower() in (".txt", ".log")]
-            if log_files:
-                try:
-                    with open(log_files[0]) as f:
-                        result_text = f.read()
-                    summary = await llm.summarize_result(result_text)
+        if llm.enabled and log_path:
+            try:
+                log_content = await self._ssh.run_shell(
+                    f"tail -100 {log_path}", discord_user_id=discord_user_id
+                )
+                if log_content.stdout:
+                    summary = await llm.summarize_result(log_content.stdout)
                     if summary and not summary.startswith("[LLM"):
-                        text += f"\n\n🤖 **AI 分析摘要：**\n{summary}"
-                except Exception as e:
-                    logger.warning(f"LLM summary failed: {e}")
+                        text += f"\n🤖 **任务总结：**\n{summary}"
+            except Exception as e:
+                logger.warning(f"Job summary failed: {e}")
 
-        # Push to notification queue — bot polls this every 5s
+        # Push to notification queue
         self._pending_notifications[channel_id] = AgentResponse(
             text=text, figures=figures + extra_attach
         )
@@ -589,22 +593,27 @@ class OmicsClawAgent:
         discord_user_id: str,
         channel_id: str,
         error_summary: Optional[str],
+        log_path: str,
     ):
-        text = (
-            f"❌ **任务 `{job_id}` 失败**\n"
-            f"<@{discord_user_id}>\n"
-        )
+        text = f"❌ **任务 `{job_id}` 失败**\n<@{discord_user_id}>\n\n"
+
         if error_summary:
             text += f"**错误摘要：**\n```\n{error_summary}\n```\n"
-            # LLM error diagnosis
-            llm = get_llm_client()
-            if llm.enabled:
-                try:
-                    diagnosis = await llm.explain_error(error_summary)
+
+        # LLM error diagnosis from job log
+        llm = get_llm_client()
+        if llm.enabled and log_path:
+            try:
+                log_content = await self._ssh.run_shell(
+                    f"tail -150 {log_path}", discord_user_id=discord_user_id
+                )
+                if log_content.stdout:
+                    diagnosis = await llm.explain_error(log_content.stdout)
                     if diagnosis and not diagnosis.startswith("[LLM"):
-                        text += f"\n🤖 **AI 错误诊断：**\n{diagnosis}\n"
-                except Exception as e:
-                    logger.warning(f"LLM error explain failed: {e}")
+                        text += f"🤖 **失败原因分析：**\n{diagnosis}\n"
+            except Exception as e:
+                logger.warning(f"LLM error explain failed: {e}")
+
         text += f"查看完整日志：`/job log {job_id}`"
 
         self._pending_notifications[channel_id] = AgentResponse(text=text)

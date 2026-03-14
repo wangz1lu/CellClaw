@@ -297,12 +297,18 @@ class JobCommandHandler:
             f"  目录：`{job.workdir}`",
             f"  已耗时：{job.elapsed()}",
         ]
+
+        # For DONE jobs with result files, show them (stored after collection)
+        if job.status == JobStatus.DONE and hasattr(job, 'result_files') and job.result_files:
+            lines.append(f"\n📁 **结果文件：**")
+            for f in job.result_files:
+                lines.append(f"  📄 `{f}`")
+            lines.append(f"\n💡 结果已通过 Discord 发送，请在任务完成消息中查看")
+        elif job.status == JobStatus.DONE:
+            lines.append(f"\n💡 结果已通过 Discord 发送，请在任务完成消息中查看")
+
         if job.error_summary:
             lines.append(f"\n**错误摘要：**\n```\n{job.error_summary}\n```")
-        if job.result_paths and job.status == JobStatus.DONE:
-            lines.append(f"\n**结果文件：**")
-            for p in job.result_paths:
-                lines.append(f"  📄 `{p}`")
 
         return CommandResult.info("\n".join(lines))
 

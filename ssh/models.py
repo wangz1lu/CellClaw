@@ -116,7 +116,8 @@ class RemoteJob:
     status: JobStatus = JobStatus.PENDING
     started_at: datetime = field(default_factory=datetime.now)
     finished_at: Optional[datetime] = None
-    result_paths: list[str] = field(default_factory=list)   # output files
+    result_paths: list[str] = field(default_factory=list)   # workdir for scanning
+    result_files: list[str] = field(default_factory=list)   # collected result files
     error_summary: Optional[str] = None
 
     def elapsed(self) -> str:

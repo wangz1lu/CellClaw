@@ -239,6 +239,7 @@ class RemoteExecutor:
     ) -> list[str]:
         """
         After job completion, collect result files from the server.
+        Scans ALL files in workdir newer than job start time (not just result_*).
         Returns list of local file paths.
         """
         local_paths = []
@@ -248,24 +249,52 @@ class RemoteExecutor:
         # Ensure local download directory exists
         Path(local_dir).mkdir(parents=True, exist_ok=True)
 
+        workdir = job.result_paths[0]  # Now it's just the workdir
+        started = job.started_at.strftime("%Y-%m-%d %H:%M:%S")
+
         sftp = await conn.sftp()
-        for pattern in job.result_paths:
-            # Expand globs on remote
-            find_result = await conn.run(
-                f"ls {pattern} 2>/dev/null", timeout=10
-            )
-            for remote_path in find_result.stdout.strip().splitlines():
-                remote_path = remote_path.strip()
-                if not remote_path:
+
+        # Scan ALL files in workdir newer than job start time
+        # Exclude common non-result files
+        exclude_ext = {".log", ".sh", ".R", ".py", ".tmp", ".lock"}
+        find_cmd = (
+            f"find {workdir} -type f "
+            f"-newermt '{started}' "
+            f"-not -path '*/.*' | "
+            f"grep -v '.log$' | "
+            f"grep -v '.sh$' | "
+            f"grep -v '.R$' | "
+            f"grep -v '.py$'"
+        )
+        
+        try:
+            find_result = await conn.run(find_cmd, timeout=30)
+            remote_files = find_result.stdout.strip().splitlines()
+        except Exception as e:
+            logger.warning(f"Failed to scan workdir: {e}")
+            remote_files = []
+
+        for remote_path in remote_files:
+            remote_path = remote_path.strip()
+            if not remote_path:
+                continue
+            
+            # Skip directories
+            try:
+                stat = await sftp.stat(remote_path)
+                if stat.flags & 0x4000:  # S_IFDIR
                     continue
-                filename = PurePosixPath(remote_path).name
-                local_path = str(PurePosixPath(local_dir) / filename)
-                try:
-                    await sftp.get(remote_path, local_path)
-                    local_paths.append(local_path)
-                    logger.info(f"Downloaded {remote_path} → {local_path}")
-                except Exception as e:
-                    logger.warning(f"Failed to download {remote_path}: {e}")
+            except:
+                pass
+            
+            filename = PurePosixPath(remote_path).name
+            local_path = str(PurePosixPath(local_dir) / filename)
+            try:
+                await sftp.get(remote_path, local_path)
+                local_paths.append(local_path)
+                logger.info(f"Downloaded {remote_path} → {local_path}")
+            except Exception as e:
+                logger.warning(f"Failed to download {remote_path}: {e}")
 
         return local_paths
 
