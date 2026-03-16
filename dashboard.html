@@ -202,9 +202,13 @@ tail -f /tmp/omicsclaw_bot.log
             input.value = '';
             msgs.scrollTop = msgs.scrollHeight;
             
-            const result = await apiPost('/chat', {message: msg, user_id: 'dashboard'});
+            // Call /chat API with correct user_id (same as Discord)
+            const result = await apiPost('/chat', {message: msg, user_id: userID});
             msgs.lastElementChild.innerHTML = `🤖 ${result.text || '⚠️ 请求失败'}`;
             msgs.scrollTop = msgs.scrollHeight;
+            
+            // Refresh history after send
+            loadHistory();
         }
         
         // Init
