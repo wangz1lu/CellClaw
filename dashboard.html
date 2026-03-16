@@ -2,111 +2,377 @@
 <html lang="zh">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OmicsClaw Dashboard</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { background: #0D0D0D; color: #FFF; font-family: -apple-system, sans-serif; min-height: 100vh; }
-        .header { background: #1A1A1A; padding: 20px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; }
-        .header h1 { color: #3B82F6; }
-        .status { color: #A0A0A0; }
-        .container { display: flex; }
-        .sidebar { width: 180px; background: #141414; padding: 20px; border-right: 1px solid #333; }
-        .sidebar button { width: 100%; padding: 12px; margin: 5px 0; border: none; border-radius: 8px; background: transparent; color: #A0A0A0; cursor: pointer; text-align: left; }
-        .sidebar button:hover { background: #1E1E1E; color: #FFF; }
-        .sidebar button.active { background: #1E3A5F; color: #3B82F6; }
-        .main { flex: 1; padding: 20px; }
+        body { 
+            background: #0D0D0D; color: #E5E5E5; 
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif; 
+            min-height: 100vh; 
+        }
+        
+        /* Header */
+        .header { 
+            background: linear-gradient(180deg, #1A1A1A 0%, #141414 100%); 
+            padding: 16px 24px; 
+            border-bottom: 1px solid #2A2A2A; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center;
+        }
+        .header h1 { 
+            font-size: 18px; 
+            font-weight: 600; 
+            color: #3B82F6; 
+            letter-spacing: -0.02em;
+        }
+        .status-bar { 
+            display: flex; 
+            gap: 24px; 
+            font-size: 13px; 
+            color: #888;
+        }
+        .status-item { display: flex; align-items: center; gap: 8px; }
+        .status-dot { width: 6px; height: 6px; border-radius: 50%; }
+        .status-dot.online { background: #22C55E; }
+        .status-dot.offline { background: #444; }
+        
+        /* Layout */
+        .container { display: flex; min-height: calc(100vh - 60px); }
+        
+        /* Sidebar */
+        .sidebar { 
+            width: 200px; 
+            background: #111; 
+            border-right: 1px solid #1A1A1A; 
+            padding: 16px 0;
+        }
+        .nav-item { 
+            display: flex; 
+            align-items: center; 
+            gap: 12px;
+            padding: 12px 20px; 
+            color: #666; 
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            border-left: 2px solid transparent;
+        }
+        .nav-item:hover { 
+            background: #151515; 
+            color: #999; 
+        }
+        .nav-item.active { 
+            background: #1a1a1a; 
+            color: #3B82F6; 
+            border-left-color: #3B82F6;
+        }
+        .nav-icon { width: 18px; text-align: center; font-size: 14px; }
+        
+        /* Main Content */
+        .main { flex: 1; padding: 24px; overflow-y: auto; }
         .page { display: none; }
         .page.active { display: block; }
-        .card { background: #1E1E1E; border: 1px solid #333; border-radius: 8px; padding: 15px; margin: 10px 0; }
+        
+        /* Page Title */
+        .page-title { 
+            font-size: 20px; 
+            font-weight: 600; 
+            color: #FFF; 
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #1A1A1A;
+        }
+        
+        /* Cards */
+        .card { 
+            background: #141414; 
+            border: 1px solid #1F1F1F; 
+            border-radius: 8px; 
+            padding: 16px; 
+            margin-bottom: 12px;
+        }
+        .card-header { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .card-title { 
+            font-size: 14px; 
+            font-weight: 600; 
+            color: #CCC;
+        }
+        .card-badge { 
+            font-size: 11px; 
+            padding: 3px 8px; 
+            border-radius: 4px; 
+            font-weight: 500;
+        }
+        .badge-running { background: #1E3A5F; color: #3B82F6; }
+        .badge-done { background: #14532D; color: #22C55E; }
+        .badge-failed { background: #450A0A; color: #EF4444; }
+        .badge-pending { background: #451C03; color: #F59E0B; }
+        
+        /* Table */
         table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #333; }
-        th { color: #A0A0A0; font-size: 12px; }
-        .online { color: #22C55E; }
-        .offline { color: #EF4444; }
-        .chat-box { height: 450px; background: #1E1E1E; border-radius: 8px; padding: 15px; overflow-y: auto; margin-bottom: 10px; }
-        .chat-msg { margin: 8px 0; }
-        .chat-msg .user { color: #3B82F6; }
-        .chat-msg .bot { color: #A0A0A0; }
-        input, button.send { padding: 10px; border-radius: 8px; border: none; }
-        input { background: #1E1E1E; border: 1px solid #333; color: #FFF; flex: 1; }
-        button.send { background: #3B82F6; color: #FFF; cursor: pointer; margin-left: 10px; }
+        th { 
+            text-align: left; 
+            padding: 10px 12px; 
+            font-size: 11px; 
+            font-weight: 600; 
+            color: #555; 
+            text-transform: uppercase; 
+            letter-spacing: 0.05em;
+            border-bottom: 1px solid #1A1A1A;
+        }
+        td { 
+            padding: 12px; 
+            font-size: 13px; 
+            color: #AAA;
+            border-bottom: 1px solid #151515;
+        }
+        tr:hover td { background: #151515; }
+        
+        /* Skill Items */
+        .skill-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            background: #181818;
+            border-radius: 6px;
+            margin-bottom: 8px;
+        }
+        .skill-name { font-weight: 600; color: #DDD; font-size: 14px; }
+        .skill-scope { font-size: 12px; color: #666; margin-top: 2px; }
+        .skill-id { 
+            font-size: 11px; 
+            padding: 2px 6px; 
+            background: #222; 
+            border-radius: 3px; 
+            color: #3B82F6;
+            font-family: monospace;
+        }
+        
+        /* Info Grid */
+        .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+        .info-box { 
+            background: #141414; 
+            border: 1px solid #1F1F1F; 
+            border-radius: 6px; 
+            padding: 16px;
+        }
+        .info-label { font-size: 11px; color: #555; text-transform: uppercase; margin-bottom: 4px; }
+        .info-value { font-size: 14px; color: #CCC; }
+        
+        /* Code */
+        code { 
+            font-family: "SF Mono", Monaco, monospace; 
+            font-size: 12px; 
+            background: #1A1A1A; 
+            padding: 2px 6px; 
+            border-radius: 3px; 
+            color: #3B82F6;
+        }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>🧬 OmicsClaw</h1>
-        <div class="status" id="statusBar">Loading...</div>
+        <h1>OmicsClaw</h1>
+        <div class="status-bar">
+            <div class="status-item">
+                <span class="status-dot offline" id="serverDot"></span>
+                <span id="serverStatus">0/0 Servers</span>
+            </div>
+            <div class="status-item">
+                <span class="status-dot offline" id="jobDot"></span>
+                <span id="jobStatus">0 Tasks</span>
+            </div>
+        </div>
     </div>
+    
     <div class="container">
         <div class="sidebar">
-            <button class="active" onclick="showPage('jobs')">📋 任务</button>
-            <button onclick="showPage('servers')">🖥️ 服务器</button>
-            <button onclick="showPage('chat')">💬 对话</button>
-            <button onclick="showPage('config')">⚙️ 配置</button>
+            <div class="nav-item active" onclick="showPage('jobs', this)">
+                <span class="nav-icon">T</span>
+                <span>Tasks</span>
+            </div>
+            <div class="nav-item" onclick="showPage('servers', this)">
+                <span class="nav-icon">S</span>
+                <span>Servers</span>
+            </div>
+            <div class="nav-item" onclick="showPage('skills', this)">
+                <span class="nav-icon">K</span>
+                <span>Skills</span>
+            </div>
+            <div class="nav-item" onclick="showPage('config', this)">
+                <span class="nav-icon">C</span>
+                <span>Config</span>
+            </div>
         </div>
+        
         <div class="main">
-            <div id="jobs" class="page active"><h2>📋 任务</h2><div id="jobsList"></div></div>
-            <div id="servers" class="page"><h2>🖥️ 服务器</h2><div id="serversList"></div></div>
-            <div id="chat" class="page">
-                <h2>💬 对话</h2>
-                <div class="chat-box" id="chatBox"></div>
-                <div style="display:flex;">
-                    <input type="text" id="chatInput" placeholder="输入消息..." onkeypress="if(event.key==='Enter')sendMsg()">
-                    <button class="send" onclick="sendMsg()">发送</button>
+            <!-- Tasks Page -->
+            <div id="jobs" class="page active">
+                <div class="page-title">Tasks</div>
+                <div id="jobsList"></div>
+            </div>
+            
+            <!-- Servers Page -->
+            <div id="servers" class="page">
+                <div class="page-title">Servers</div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Host</th>
+                            <th>Port</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="serversList"></tbody>
+                </table>
+            </div>
+            
+            <!-- Skills Page -->
+            <div id="skills" class="page">
+                <div class="page-title">Skills</div>
+                <div id="skillsList"></div>
+            </div>
+            
+            <!-- Config Page -->
+            <div id="config" class="page">
+                <div class="page-title">Config</div>
+                <div class="info-grid">
+                    <div class="info-box">
+                        <div class="info-label">API Port</div>
+                        <div class="info-value">19766</div>
+                    </div>
+                    <div class="info-box">
+                        <div class="info-label">Dashboard Port</div>
+                        <div class="info-value">7860</div>
+                    </div>
+                    <div class="info-box">
+                        <div class="info-label">WebSocket</div>
+                        <div class="info-value">19765</div>
+                    </div>
+                    <div class="info-box">
+                        <div class="info-label">Data Directory</div>
+                        <div class="info-value">data/</div>
+                    </div>
+                </div>
+                <div class="card" style="margin-top: 20px;">
+                    <div class="card-title">Commands</div>
+                    <div style="margin-top: 12px; font-size: 13px; color: #666; line-height: 1.8;">
+                        <div><code>bash restart.sh</code> - Restart bot</div>
+                        <div><code>tail -f /tmp/omicsclaw_bot.log</code> - View logs</div>
+                    </div>
                 </div>
             </div>
-            <div id="config" class="page"><h2>⚙️ 配置</h2><div class="card"><p>API: 19766</p><p>Dashboard: 7860</p></div></div>
         </div>
     </div>
+
     <script>
     const API = '/api';
-    const userID = '1479355442499948555';
     
-    function showPage(id) {
+    function showPage(id, el) {
         document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-        document.querySelectorAll('.sidebar button').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
         document.getElementById(id).classList.add('active');
-        event.target.classList.add('active');
+        el.classList.add('active');
     }
     
     async function apiGet(url) {
         try { return await fetch(API + url).then(r => r.json()); } catch { return {}; }
     }
     
-    async function apiPost(url, data) {
-        try { return await fetch(API + url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)}).then(r => r.json()); } catch { return {}; }
-    }
-    
     async function updateStatus() {
         const s = await apiGet('/stats');
-        document.getElementById('statusBar').innerText = `🖥️ ${s.servers_online||0}/${s.servers||0} | 📊 ${s.jobs_running||0}/${s.jobs||0}`;
+        document.getElementById('serverStatus').innerText = (s.servers_online || 0) + '/' + (s.servers || 0) + ' Servers';
+        document.getElementById('serverDot').className = 'status-dot ' + ((s.servers_online > 0) ? 'online' : 'offline');
+        document.getElementById('jobStatus').innerText = (s.jobs_running || 0) + ' Running';
+        document.getElementById('jobDot').className = 'status-dot ' + ((s.jobs_running > 0) ? 'online' : 'offline');
     }
     
     async function loadJobs() {
         const jobs = await apiGet('/jobs');
-        document.getElementById('jobsList').innerHTML = jobs.length ? jobs.map(j => `<div class="card"><b>${j.job_id}</b> ${j.status} | ${j.elapsed}</div>`).join('') : '<p>暂无任务</p>';
+        if (!jobs.length) {
+            document.getElementById('jobsList').innerHTML = '<div class="card"><div style="color:#555;text-align:center;padding:20px;">No active tasks</div></div>';
+            return;
+        }
+        let html = '';
+        jobs.forEach(j => {
+            const statusClass = {'running': 'badge-running', 'done': 'badge-done', 'failed': 'badge-failed', 'pending': 'badge-pending'}[j.status] || 'badge-pending';
+            const statusText = {'running': 'Running', 'done': 'Done', 'failed': 'Failed', 'pending': 'Pending'}[j.status] || j.status;
+            html += `
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">${j.job_id}</span>
+                        <span class="card-badge ${statusClass}">${statusText}</span>
+                    </div>
+                    <div style="font-size:13px;color:#888;margin-bottom:8px;">${j.description || 'N/A'}</div>
+                    <div style="display:flex;gap:20px;font-size:12px;color:#555;">
+                        <span>Dir: <code>${(j.workdir || '').substring(0,40)}</code></span>
+                        <span>Time: ${j.elapsed || 'N/A'}</span>
+                    </div>
+                </div>
+            `;
+        });
+        document.getElementById('jobsList').innerHTML = html;
     }
     
     async function loadServers() {
         const srvs = await apiGet('/servers');
-        document.getElementById('serversList').innerHTML = srvs.length ? `<table><tr><th>服务器</th><th>地址</th><th>状态</th></tr>${srvs.map(s => `<tr><td><b>${s.server_id}</b></td><td>${s.host}:${s.port}</td><td class="${s.online?'online':'offline'}">${s.online?'🟢':'🔴'}</td></tr>`).join('')}</table>` : '<p>暂无服务器</p>';
+        if (!srvs.length) {
+            document.getElementById('serversList').innerHTML = '<tr><td colspan="4" style="text-align:center;color:#555;padding:20px;">No servers configured</td></tr>';
+            return;
+        }
+        let html = '';
+        srvs.forEach(s => {
+            html += `
+                <tr>
+                    <td style="color:#CCC;font-weight:600;">${s.server_id}</td>
+                    <td><code>${s.host}</code></td>
+                    <td>${s.port}</td>
+                    <td><span class="card-badge ${s.online ? 'badge-done' : 'badge-failed'}">${s.online ? 'Online' : 'Offline'}</span></td>
+                </tr>
+            `;
+        });
+        document.getElementById('serversList').innerHTML = html;
     }
     
-    async function sendMsg() {
-        const input = document.getElementById('chatInput');
-        const msg = input.value.trim();
-        if (!msg) return;
-        const box = document.getElementById('chatBox');
-        box.innerHTML += `<div class="chat-msg user">👤 ${msg}</div>`;
-        box.innerHTML += `<div class="chat-msg bot">⏳ 处理中...</div>`;
-        box.scrollTop = box.scrollHeight;
-        input.value = '';
-        const r = await apiPost('/chat', {message: msg, user_id: userID});
-        box.lastElementChild.innerHTML = '🤖 ' + (r.text || '⚠️ 错误');
-        box.scrollTop = box.scrollHeight;
+    async function loadSkills() {
+        // Skills are loaded from the server at runtime - show static list for now
+        const skills = [
+            {id: 'ccc_cellchat', name: 'CellChat', scope: 'Cell communication analysis'},
+            {id: 'deg_analysis', name: 'DEG', scope: 'Differential gene expression'},
+            {id: 'gsea_enrichment', name: 'GSEA', scope: 'GO/KEGG enrichment'},
+            {id: 'dimreduc_standard', name: 'DimReduc', scope: 'Standard clustering'},
+            {id: 'annotation_sctype', name: 'Annotation', scope: 'Cell type annotation'},
+            {id: 'batch_harmony', name: 'Batch', scope: 'Batch correction'}
+        ];
+        let html = '';
+        skills.forEach(s => {
+            html += `
+                <div class="skill-item">
+                    <div>
+                        <div class="skill-name">${s.name}</div>
+                        <div class="skill-scope">${s.scope}</div>
+                    </div>
+                    <span class="skill-id">${s.id}</span>
+                </div>
+            `;
+        });
+        document.getElementById('skillsList').innerHTML = html;
     }
     
-    updateStatus(); loadJobs(); loadServers();
+    // Init
+    updateStatus();
+    loadJobs();
+    loadServers();
+    loadSkills();
     setInterval(() => { updateStatus(); loadJobs(); loadServers(); }, 5000);
     </script>
 </body>
