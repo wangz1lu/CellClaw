@@ -90,11 +90,12 @@ class OmicsClawBot(discord.Client):
         logger.info(f"✅ Logged in as {self.user} (id={self.user.id})")
         logger.info(f"   Connected to {len(self.guilds)} guild(s)")
         
-        # Start Dashboard API servers (separate from Gradio UI)
+        # Start Dashboard API servers
         try:
+            from dashboard.start import start_api
             start_api(self.agent._ssh, self.agent)
-            logger.info("🚀 Dashboard API started (API: 8766, WS: 8765)")
-            logger.info("   To open Dashboard UI: python dashboard_launcher.py")
+            logger.info("🚀 Dashboard API started (API: 19766)")
+            logger.info("   Dashboard: python dashboard_server.py")
         except Exception as e:
             logger.warning(f"Dashboard API not available: {e}")
         
