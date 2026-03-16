@@ -122,6 +122,8 @@ tail -f /tmp/omicsclaw_bot.log
 
     <script>
         const API = '/api';
+        const SESSION_API = "/api/sessions/";
+        const userID = "1479355442499948555"; // leader
         
         function showPage(page) {
             document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -165,6 +167,16 @@ tail -f /tmp/omicsclaw_bot.log
             document.getElementById('jobsList').innerHTML = html;
         }
         
+        async function loadHistory() {
+            try {
+                const res = await fetch(SESSION_API + userID + "/history?limit=50");
+                const data = await res.json();
+                const msgs = data.messages || [];
+                const html = msgs.map(m => `<div class="msg ${m.role}"><span class="${m.role}">${m.role === 'user' ? '👤' : '🤖'}</span> ${m.content.substring(0,100)}</div>`).join("");
+                document.getElementById("chatMessages").innerHTML = html || '<p>暂无对话记录</p>';
+            } catch(e) { console.log(e); }
+        }
+        
         async function loadServers() {
             const servers = await apiGet('/servers');
             const html = servers.length ? `
@@ -199,7 +211,8 @@ tail -f /tmp/omicsclaw_bot.log
         updateStatus();
         loadJobs();
         loadServers();
-        setInterval(() => { updateStatus(); loadJobs(); loadServers(); }, 5000);
+        loadHistory();
+        setInterval(() => { updateStatus(); loadJobs(); loadServers(); loadHistory(); }, 5000);
     </script>
 </body>
 </html>

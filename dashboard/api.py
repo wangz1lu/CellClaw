@@ -6,7 +6,7 @@ Provides endpoints for server and job status
 
 import logging
 from typing import Optional, List, Dict, Any
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 
 logger = logging.getLogger("omicsclaw.api")
@@ -147,14 +147,21 @@ async def get_job_log(job_id: str, tail: int = 50):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# Add session path config
+import os
+from pathlib import Path
+
+DATA_DIR = os.environ.get("OMICSCLAW_DATA", str(Path(__file__).parent.parent / "data"))
+SESSION_DIR = Path(DATA_DIR) / "sessions"
+
+# Also fix the API to use absolute path
 @app.get("/sessions/{user_id}/history")
 async def get_session_history(user_id: str, limit: int = 50):
     """Get chat history for a user"""
     try:
         import json
-        from pathlib import Path
         
-        session_file = Path(f"data/sessions/{user_id}.jsonl")
+        session_file = SESSION_DIR / f"{user_id}.jsonl"
         if not session_file.exists():
             return {"messages": []}
         
@@ -171,6 +178,33 @@ async def get_session_history(user_id: str, limit: int = 50):
     except Exception as e:
         logger.error(f"Error getting history: {e}")
         return {"messages": [], "error": str(e)}
+
+
+@app.post("/sessions/{user_id}/message")
+async def add_session_message(user_id: str):
+    """Add a message to the session file"""
+    try:
+        import json
+        from datetime import datetime
+        
+        session_file = SESSION_DIR / f"{user_id}.jsonl"
+        session_file.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Read request body
+        content = await request.json()
+        msg = {
+            "role": content.get("role", "user"),
+            "content": content.get("content", ""),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        with open(session_file, "a") as f:
+            f.write(json.dumps(msg, ensure_ascii=False) + "\n")
+        
+        return {"success": True, "message": msg}
+    except Exception as e:
+        logger.error(f"Error adding message: {e}")
+        return {"success": False, "error": str(e)}
 
 
 @app.post("/chat", response_model=ChatResponse)
