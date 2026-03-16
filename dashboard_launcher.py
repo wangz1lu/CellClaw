@@ -12,7 +12,7 @@ import time
 # Add parent to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-API_PORT = 18766
+API_PORT = 118766
 WS_PORT = 18765
 DASHBOARD_PORT = 7860
 
