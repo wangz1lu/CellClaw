@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OmicsClaw Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #0D0D0D; color: #FFF; min-height: 100vh;
+        }
+        .header {
+            background: #1A1A1A; padding: 20px; border-bottom: 1px solid #333;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .header h1 { color: #3B82F6; font-size: 24px; }
+        .status { color: #A0A0A0; font-size: 14px; }
+        
+        .container { display: flex; min-height: calc(100vh - 70px); }
+        .sidebar {
+            width: 200px; background: #141414; padding: 20px; border-right: 1px solid #333;
+        }
+        .sidebar button {
+            width: 100%; padding: 12px; margin: 5px 0; border: none; border-radius: 8px;
+            background: transparent; color: #A0A0A0; cursor: pointer; text-align: left;
+            font-size: 14px; transition: all 0.2s;
+        }
+        .sidebar button:hover { background: #1E1E1E; color: #FFF; }
+        .sidebar button.active { background: #1E3A5F; color: #3B82F6; }
+        
+        .main { flex: 1; padding: 20px; overflow-y: auto; }
+        .page { display: none; }
+        .page.active { display: block; }
+        
+        .card {
+            background: #1E1E1E; border: 1px solid #333; border-radius: 8px;
+            padding: 15px; margin: 10px 0;
+        }
+        .card h3 { color: #3B82F6; margin-bottom: 10px; }
+        
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #333; }
+        th { color: #A0A0A0; font-size: 12px; text-transform: uppercase; }
+        
+        .online { color: #22C55E; }
+        .offline { color: #EF4444; }
+        .running { color: #3B82F6; }
+        
+        input, textarea {
+            width: 100%; padding: 10px; margin: 5px 0; border-radius: 8px;
+            background: #1E1E1E; border: 1px solid #333; color: #FFF;
+        }
+        button.send {
+            background: #3B82F6; color: #FFF; border: none; padding: 10px 20px;
+            border-radius: 8px; cursor: pointer;
+        }
+        button.send:hover { background: #2563EB; }
+        
+        .chat-messages { height: 300px; overflow-y: auto; background: #1E1E1E; border-radius: 8px; padding: 10px; margin-bottom: 10px; }
+        .chat-messages .msg { margin: 5px 0; }
+        .chat-messages .user { color: #3B82F6; }
+        .chat-messages .bot { color: #A0A0A0; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🧬 OmicsClaw Dashboard</h1>
+        <div class="status" id="statusBar">Loading...</div>
+    </div>
+    
+    <div class="container">
+        <div class="sidebar">
+            <button class="active" onclick="showPage('jobs')">📋 任务</button>
+            <button onclick="showPage('servers')">🖥️ 服务器</button>
+            <button onclick="showPage('chat')">💬 对话</button>
+            <button onclick="showPage('config')">⚙️ 配置</button>
+        </div>
+        
+        <div class="main">
+            <!-- Jobs Page -->
+            <div id="jobs" class="page active">
+                <h2>📋 任务监控</h2>
+                <div id="jobsList"></div>
+            </div>
+            
+            <!-- Servers Page -->
+            <div id="servers" class="page">
+                <h2>🖥️ 服务器</h2>
+                <div id="serversList"></div>
+            </div>
+            
+            <!-- Chat Page -->
+            <div id="chat" class="page">
+                <h2>💬 对话</h2>
+                <div class="chat-messages" id="chatMessages"></div>
+                <div style="display: flex; gap: 10px;">
+                    <input type="text" id="chatInput" placeholder="输入消息..." onkeypress="if(event.key==='Enter')sendMessage()">
+                    <button class="send" onclick="sendMessage()">发送</button>
+                </div>
+            </div>
+            
+            <!-- Config Page -->
+            <div id="config" class="page">
+                <h2>⚙️ 配置</h2>
+                <div class="card">
+                    <h3>当前配置</h3>
+                    <p>API 端口: <strong>19766</strong></p>
+                    <p>Dashboard 端口: <strong>7860</strong></p>
+                    <p>WebSocket 端口: <strong>19765</strong></p>
+                </div>
+                <div class="card">
+                    <h3>快速命令</h3>
+                    <pre style="background: #1E1E1E; padding: 10px; border-radius: 8px; overflow-x: auto;">
+bash restart.sh
+tail -f /tmp/omicsclaw_bot.log
+                    </pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API = 'http://127.0.0.1:19766';
+        
+        function showPage(page) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.sidebar button').forEach(b => b.classList.remove('active'));
+            document.getElementById(page).classList.add('active');
+            event.target.classList.add('active');
+        }
+        
+        async function apiGet(endpoint) {
+            try {
+                const res = await fetch(API + endpoint);
+                return await res.json();
+            } catch(e) { return {}; }
+        }
+        
+        async function apiPost(endpoint, data) {
+            try {
+                const res = await fetch(API + endpoint, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(data)
+                });
+                return await res.json();
+            } catch(e) { return {}; }
+        }
+        
+        async function updateStatus() {
+            const stats = await apiGet('/stats');
+            document.getElementById('statusBar').innerHTML = 
+                `🖥️ ${stats.servers_online || 0}/${stats.servers || 0} 服务器 | 📊 ${stats.jobs_running || 0}/${stats.jobs || 0} 任务`;
+        }
+        
+        async function loadJobs() {
+            const jobs = await apiGet('/jobs');
+            const html = jobs.length ? jobs.map(j => `
+                <div class="card">
+                    <strong>${j.job_id}</strong> — ${j.description?.substring(0,40) || 'N/A'}<br>
+                    <span class="${j.status}">${j.status}</span> | ${j.elapsed}
+                </div>
+            `).join('') : '<p>暂无任务</p>';
+            document.getElementById('jobsList').innerHTML = html;
+        }
+        
+        async function loadServers() {
+            const servers = await apiGet('/servers');
+            const html = servers.length ? `
+                <table><tr><th>服务器</th><th>地址</th><th>状态</th></tr>
+                ${servers.map(s => `
+                    <tr><td><strong>${s.server_id}</strong></td>
+                    <td>${s.host}:${s.port}</td>
+                    <td class="${s.online ? 'online' : 'offline'}">${s.online ? '🟢 Online' : '🔴 Offline'}</td></tr>
+                `).join('')}
+                </table>
+            ` : '<p>暂无服务器</p>';
+            document.getElementById('serversList').innerHTML = html;
+        }
+        
+        async function sendMessage() {
+            const input = document.getElementById('chatInput');
+            const msg = input.value.trim();
+            if (!msg) return;
+            
+            const msgs = document.getElementById('chatMessages');
+            msgs.innerHTML += `<div class="msg user">👤 ${msg}</div>`;
+            msgs.innerHTML += `<div class="msg bot">⏳ 处理中...</div>`;
+            input.value = '';
+            msgs.scrollTop = msgs.scrollHeight;
+            
+            const result = await apiPost('/chat', {message: msg, user_id: 'dashboard'});
+            msgs.lastElementChild.innerHTML = `🤖 ${result.text || '⚠️ 请求失败'}`;
+            msgs.scrollTop = msgs.scrollHeight;
+        }
+        
+        // Init
+        updateStatus();
+        loadJobs();
+        loadServers();
+        setInterval(() => { updateStatus(); loadJobs(); loadServers(); }, 5000);
+    </script>
+</body>
+</html>
