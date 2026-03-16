@@ -78,7 +78,7 @@ async def handle_client(websocket, path):
         logger.info(f"Client disconnected. Total: {len(connected_clients)}")
 
 
-async def start_websocket_server(host: str = "127.0.0.1", port: int = 18765):
+async def start_websocket_server(host: str = "127.0.0.1", port: int = 19765):
     """Start WebSocket server"""
     import websockets
     

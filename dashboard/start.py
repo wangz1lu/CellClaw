@@ -25,11 +25,11 @@ def start_api(ssh_manager, agent):
     init_api(ssh_manager, agent)
     
     def run():
-        uvicorn.run(fastapi_app, host="127.0.0.1", port=18766, log_level="warning")
+        uvicorn.run(fastapi_app, host="127.0.0.1", port=19766, log_level="warning")
     
     thread = threading.Thread(target=run, daemon=True)
     thread.start()
-    logger.info(f"API server started on port 18766")
+    logger.info(f"API server started on port 19766")
 
 
 def start_ws():
@@ -41,7 +41,7 @@ def start_ws():
     
     thread = threading.Thread(target=run, daemon=True)
     thread.start()
-    logger.info(f"WebSocket server started on port 18765")
+    logger.info(f"WebSocket server started on port 19765")
 
 
 if __name__ == "__main__":

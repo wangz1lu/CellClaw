@@ -19,8 +19,8 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("omicsclaw.dashboard")
 
 # Configuration
-API_PORT = 18766
-WS_PORT = 18765
+API_PORT = 19766
+WS_PORT = 19765
 DASHBOARD_PORT = 7860
 
 # Global state
