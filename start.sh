@@ -32,18 +32,15 @@ else
     PYTHON="python3"
 fi
 
-# 检查 discord 模块是否可用
+# 检查 discord 模块是否可用，如果没有则自动安装
 if ! "$PYTHON" -c "import discord" 2>/dev/null; then
-    echo ""
-    echo "❌ 缺少依赖包（discord 未安装）"
-    echo ""
-    echo "   请运行以下命令安装依赖："
-    echo "     bash install.sh"
-    echo ""
-    echo "   或手动安装："
-    echo "     source venv/bin/activate"
-    echo "     pip install -r requirements.txt"
-    echo ""
+    echo "📦 缺少依赖，正在自动安装..."
+    "$PYTHON" -m pip install -q -r "$SCRIPT_DIR/requirements.txt"
+fi
+
+# 再次检查
+if ! "$PYTHON" -c "import discord" 2>/dev/null; then
+    echo "❌ 依赖安装失败，请手动运行: bash install.sh"
     exit 1
 fi
 
