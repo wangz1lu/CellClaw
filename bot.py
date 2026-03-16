@@ -92,8 +92,6 @@ class OmicsClawBot(discord.Client):
         
         # Start Dashboard API servers (separate from Gradio UI)
         try:
-            from dashboard.start import start_api, start_ws
-            start_ws()
             start_api(self.agent._ssh, self.agent)
             logger.info("🚀 Dashboard API started (API: 8766, WS: 8765)")
             logger.info("   To open Dashboard UI: python dashboard_launcher.py")
@@ -292,7 +290,6 @@ def main():
 
     # Start Dashboard servers (API + WebSocket) in background
     try:
-        from dashboard.app import start_api_server, start_websocket_server
         from omics_discord.gateway import OmicsClawGateway
         # Note: Gateway not yet created, will start after
         logger.info("Dashboard servers will start with gateway")
