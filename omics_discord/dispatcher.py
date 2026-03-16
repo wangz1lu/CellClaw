@@ -287,7 +287,7 @@ class CommandDispatcher:
             "/job log    <job_id>\n"
             "/job cancel <job_id>\n"
             "```\n"
-            "💡 也可直接说"挂后台"/"提交任务"让 Agent 后台执行\n\n"
+            '💡 也可直接说"挂后台"/"提交任务"让 Agent 后台执行\n\n'
             "**分析 Skill**\n"
             "```\n"
             "/skill list                        — 列出所有已安装的 Skill（含 ID、触发词）\n"
