@@ -9,16 +9,11 @@ import os
 import requests
 import time
 
-# Add parent to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 API_PORT = 19766
-WS_PORT = 18765
 DASHBOARD_PORT = 7860
 
 
 def wait_for_api(timeout=30):
-    """Wait for API to be ready"""
     start = time.time()
     while time.time() - start < timeout:
         try:
@@ -36,7 +31,6 @@ def main():
     print("🧬 OmicsClaw Dashboard Launcher")
     print("=" * 50)
     
-    # Check if API is running
     print(f"\n📡 Checking API server...")
     if not wait_for_api():
         print(f"❌ API not responding on port {API_PORT}")
@@ -45,8 +39,6 @@ def main():
         return
     
     print(f"✅ API server is running")
-    
-    # Start Gradio
     print(f"\n🚀 Starting Dashboard on http://127.0.0.1:{DASHBOARD_PORT}")
     print("   Press Ctrl+C to stop\n")
     
