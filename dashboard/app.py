@@ -66,7 +66,7 @@ def build_jobs_page():
                 }
                 status_text, status_class = status_map.get(status, (status, "info"))
                 
-                with gr.Card():
+                with gr.Box():
                     gr.Markdown(f"**{j.get('job_id', '-')}** — {j.get('description', '')[:50]}")
                     gr.Markdown(f"状态: `{status_text}` | 目录: `{j.get('workdir', '')}` | 耗时: {j.get('elapsed', '-')}")
 
@@ -80,7 +80,7 @@ def build_servers_page():
         else:
             for s in servers:
                 status = "🟢 Online" if s.get("online") else "🔴 Offline"
-                with gr.Card():
+                with gr.Box():
                     gr.Markdown(f"**{s.get('server_id', 'Unknown')}** ({status})")
                     gr.Markdown(f"地址: `{s.get('host', '-')}:{s.get('port', '-')}`")
 
