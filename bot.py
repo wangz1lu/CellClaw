@@ -89,6 +89,16 @@ class OmicsClawBot(discord.Client):
     async def on_ready(self):
         logger.info(f"✅ Logged in as {self.user} (id={self.user.id})")
         logger.info(f"   Connected to {len(self.guilds)} guild(s)")
+        
+        # Start Dashboard servers
+        try:
+            from dashboard.app import start_api_server, start_websocket_server
+            start_websocket_server()
+            start_api_server(self.agent._ssh, self.agent)
+            logger.info("🚀 Dashboard servers started (API: 8766, WS: 8765)")
+        except Exception as e:
+            logger.warning(f"Dashboard start failed: {e}")
+        
         self.poll_notifications.start()
 
     async def on_disconnect(self):
@@ -278,6 +288,15 @@ def main():
 
     import ssl as _ssl
     _ssl._create_default_https_context = _ssl._create_unverified_context
+
+    # Start Dashboard servers (API + WebSocket) in background
+    try:
+        from dashboard.app import start_api_server, start_websocket_server
+        from omics_discord.gateway import OmicsClawGateway
+        # Note: Gateway not yet created, will start after
+        logger.info("Dashboard servers will start with gateway")
+    except ImportError as e:
+        logger.warning(f"Dashboard not available: {e}")
 
     bot = OmicsClawBot(proxy=PROXY)
     logger.info("Starting OmicsClaw Discord Gateway...")

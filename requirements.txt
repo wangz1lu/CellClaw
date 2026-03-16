@@ -19,3 +19,10 @@ cryptography>=41.0.0
 
 # SSL certificate bundle (required by discord.py on some systems)
 certifi>=2024.0.0
+
+# Dashboard (optional)
+fastapi>=0.109.0
+uvicorn>=0.27.0
+gradio>=4.0.0
+websockets>=12.0
+psutil>=5.9.0
