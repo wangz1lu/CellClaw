@@ -117,6 +117,13 @@ class OmicsClawBot(discord.Client):
         content   = message.content.strip()
 
         # Skip empty messages that only have non-file attachments (reactions, etc.)
+
+        # Check if bot was mentioned (for group channels)
+        is_mention = self.user in message.mentions or f"<@{self.user.id}>" in content
+
+        # For group channels (not DM), require mention
+        if not is_dm and not is_mention:
+            return
         if not content and not message.attachments:
             return
 
