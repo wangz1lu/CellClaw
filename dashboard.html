@@ -57,7 +57,7 @@
         }
         button.send:hover { background: #2563EB; }
         
-        .chat-messages { height: 300px; overflow-y: auto; background: #1E1E1E; border-radius: 8px; padding: 10px; margin-bottom: 10px; }
+        .chat-messages { height: 500px; overflow-y: auto; background: #1E1E1E; border-radius: 8px; padding: 10px; margin-bottom: 10px; }
         .chat-messages .msg { margin: 5px 0; }
         .chat-messages .user { color: #3B82F6; }
         .chat-messages .bot { color: #A0A0A0; }
@@ -167,12 +167,7 @@ tail -f /tmp/omicsclaw_bot.log
             document.getElementById('jobsList').innerHTML = html;
         }
         
-        async function loadHistory() {
-            try {
-                const res = await fetch(SESSION_API + userID + "/history?limit=50");
-                const data = await res.json();
-                const msgs = data.messages || [];
-                const html = msgs.map(m => `<div class="msg ${m.role}"><span class="${m.role}">${m.role === 'user' ? '👤' : '🤖'}</span> ${m.content.substring(0,100)}</div>`).join("");
+        "><span class="${m.role}">${m.role === 'user' ? '👤' : '🤖'}</span> ${m.content.substring(0,100)}</div>`).join("");
                 document.getElementById("chatMessages").innerHTML = html || '<p>暂无对话记录</p>';
             } catch(e) { console.log(e); }
         }
@@ -208,15 +203,14 @@ tail -f /tmp/omicsclaw_bot.log
             msgs.scrollTop = msgs.scrollHeight;
             
             // Refresh history after send
-            loadHistory();
+            
         }
         
         // Init
         updateStatus();
         loadJobs();
         loadServers();
-        loadHistory();
-        setInterval(() => { updateStatus(); loadJobs(); loadServers(); loadHistory(); }, 5000);
+        setInterval(() => { updateStatus(); loadJobs(); loadServers(); }, 5000);
     </script>
 </body>
 </html>
