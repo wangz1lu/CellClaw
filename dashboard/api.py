@@ -204,7 +204,14 @@ async def get_stats():
         return {"servers": 0, "jobs": 0, "connected": 0}
     
     total_servers = len(_ssh_manager._registry._servers)
-    connected = len(_ssh_manager._registry._conns)
+    
+    # Count connected servers
+    connected = 0
+    try:
+        connected = len(_ssh_manager._connections._pool)
+    except:
+        pass
+    
     total_jobs = len(_ssh_manager._jobs)
     running_jobs = sum(1 for j in _ssh_manager._jobs.values() if j.status.value == "running")
     
