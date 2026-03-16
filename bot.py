@@ -81,8 +81,29 @@ class OmicsClawBot(discord.Client):
         logger.info(f"OmicsClawBot created | data_dir={DATA_DIR} | proxy={proxy or 'none'}")
 
     async def setup_hook(self):
-        """Called after login — placeholder for future slash command registration."""
+        # Register slash commands
+        @self.tree.command()
+        async def server_cmd(interaction: discord.Interaction):
+            await interaction.response.send_message("Server commands: /server add/list/use/test/info/remove")
+
+        @self.tree.command()
+        async def env_cmd(interaction: discord.Interaction):
+            await interaction.response.send_message("Env commands: /env list/use/scan")
+
+        @self.tree.command()
+        async def job_cmd(interaction: discord.Interaction):
+            await interaction.response.send_message("Job commands: /job list/set/status/log/cancel")
+
+        @self.tree.command()
+        async def skill_cmd(interaction: discord.Interaction):
+            await interaction.response.send_message("Skill commands: /skill list/info/use/run")
+
+        @self.tree.command()
+        async def memory_cmd(interaction: discord.Interaction):
+            await interaction.response.send_message("Memory commands: /memory show/today/clear/note")
+
         logger.info(f"  setup_hook: bot={self.user}")
+        logger.info("  Slash commands registered")
 
     # ── Lifecycle ────────────────────────────────────────────────────────
 
