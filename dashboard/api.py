@@ -74,15 +74,21 @@ async def get_servers():
         registry = _ssh_manager._registry
         
         # Get all server configs
-        for server_id, config in registry._servers.items():
-            # Check if connected
-            is_online = server_id in registry._conns
+        for key, data in registry._servers.items():
+            # Check if connected - connections are in _connections._pool
+            is_online = False
+            try:
+                pool = _ssh_manager._connections._pool
+                # Check if any connection exists for this server
+                is_online = any(key in k for k in pool.keys())
+            except:
+                pass
             
             servers.append(ServerStatus(
-                server_id=server_id,
-                name=config.server_id,
-                host=config.host,
-                port=config.port,
+                server_id=data.get("server_id", key),
+                name=data.get("server_id", "Unknown"),
+                host=data.get("host", "-"),
+                port=data.get("port", 22),
                 online=is_online,
                 conda_envs=[]
             ))
