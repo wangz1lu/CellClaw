@@ -807,6 +807,8 @@ class OmicsClawAgent:
                 return await self._tool_read_skill(args, tool_log)
             if name == "remember":
                 return self._tool_remember(args, mem, tool_log)
+            if name == "web_fetch":
+                return await self._tool_web_fetch(args, tool_log)
 
             # switch_env: update session state (same as /env use)
             if name == "switch_env":
@@ -1044,6 +1046,75 @@ class OmicsClawAgent:
         mem.append_memory(entry)
         tool_log.append(f"remember: {content[:60]}")
         return "✅ 已记录到长期记忆"
+
+    async def _tool_web_fetch(self, args: dict, tool_log: list) -> str:
+        """Fetch web page content."""
+        import aiohttp
+        from urllib.parse import urlparse
+
+        url = args.get("url", "")
+        max_chars = args.get("max_chars", 8000)
+
+        if not url:
+            return "❌ web_fetch 工具缺少 url 参数"
+
+        # Validate URL
+        parsed = urlparse(url)
+        if not parsed.scheme or not parsed.netloc:
+            return f"❌ 无效的 URL: {url}"
+
+        tool_log.append(f"web_fetch: {url}")
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                    if resp.status != 200:
+                        return f"❌ 网页请求失败，状态码: {resp.status}"
+
+                    html = await resp.text()
+
+            # Simple HTML to text extraction
+            text = self._extract_text_from_html(html)
+
+            if len(text) > max_chars:
+                text = text[:max_chars] + f"\n\n...（内容超出 {max_chars} 字符，已截断）"
+
+            if not text:
+                return f"⚠️ 无法从网页提取文本: {url}"
+
+            return f"📄 **网页内容** ({url}):\n\n{text}"
+
+        except Exception as e:
+            return f"❌ web_fetch 失败: {str(e)}"
+
+    def _extract_text_from_html(self, html: str) -> str:
+        """Simple HTML to text extraction."""
+        import re
+
+        # Remove script and style
+        text = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(r'<style[^>]*>.*?</style>', '', text, flags=re.DOTALL | re.IGNORECASE)
+
+        # Replace common tags with newlines
+        text = re.sub(r'<(br|p|div|h[1-6]|li|tr)[^>]*>', '\n', text, flags=re.IGNORECASE)
+        text = re.sub(r'</(p|div|h[1-6]|li|tr)>', '', text, flags=re.IGNORECASE)
+
+        # Remove remaining tags
+        text = re.sub(r'<[^>]+>', '', text)
+
+        # Decode HTML entities
+        text = text.replace('&nbsp;', ' ')
+        text = text.replace('&lt;', '<')
+        text = text.replace('&gt;', '>')
+        text = text.replace('&amp;', '&')
+        text = text.replace('&quot;', '"')
+
+        # Clean up whitespace
+        text = re.sub(r'\n\s*\n', '\n\n', text)
+        text = re.sub(r'[ \t]+', ' ', text)
+        text = text.strip()
+
+        return text
 
     # ------------------------------------------------------------------ #
 

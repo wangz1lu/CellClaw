@@ -210,6 +210,27 @@ TOOL_SCHEMAS = [
                 "required": ["script_path", "description"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "web_fetch",
+            "description": "获取网页内容。用户给你一个链接（URL），用这个工具读取网页的文本内容。不需要浏览器，直接 HTTP 请求并提取可读文本。返回 Markdown 格式的网页内容。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "要获取的网页 URL，如 https://satijalab.org/seurat/articles/pbmc3k_tutorial.html"
+                    },
+                    "max_chars": {
+                        "type": "integer",
+                        "description": "（可选）最大返回字符数，默认 8000。超出部分会被截断。"
+                    }
+                },
+                "required": ["url"]
+            }
+        }
     }
 ]
 
