@@ -200,7 +200,7 @@ You will need to create a new application with a bot, add the bot to your server
 ### 1.Create a Discord application and bot
 
 Go to the Discord Developer Portal and click New Application. Name it something like “CellClaw”.
-Click Bot on the sidebar. Set the Username to whatever you call your OpenClaw agent.
+Click Bot on the sidebar. Set the Username to whatever you call your CellClaw agent.
 
 ### 2.Enable privileged intents
 
