@@ -81,56 +81,7 @@ class CellClawBot(discord.Client):
         logger.info(f"CellClawBot created | data_dir={DATA_DIR} | proxy={proxy or 'none'}")
 
     async def setup_hook(self):
-        # Register slash commands that call actual handlers
-        tree = self.tree
-        
-        @tree.command(name="server", description="Server management")
-        async def server_slash(interaction: discord.Interaction, action: str = "list"):
-            cmd = f"/server {action}"
-            result = await self.agent._dispatcher.dispatch(cmd, str(interaction.user.id), is_dm=False)
-            if result:
-                await interaction.response.send_message(result.text, ephemeral=True)
-            else:
-                await interaction.response.send_message("Use /server add/list/use/test/info/remove", ephemeral=True)
-
-        @tree.command(name="env", description="Environment management")
-        async def env_slash(interaction: discord.Interaction, action: str = "list"):
-            cmd = f"/env {action}"
-            result = await self.agent._dispatcher.dispatch(cmd, str(interaction.user.id), is_dm=False)
-            if result:
-                await interaction.response.send_message(result.text, ephemeral=True)
-            else:
-                await interaction.response.send_message("Use /env list/use/scan", ephemeral=True)
-
-        @tree.command(name="job", description="Job management")
-        async def job_slash(interaction: discord.Interaction, action: str = "list"):
-            cmd = f"/job {action}"
-            result = await self.agent._dispatcher.dispatch(cmd, str(interaction.user.id), is_dm=False)
-            if result:
-                await interaction.response.send_message(result.text, ephemeral=True)
-            else:
-                await interaction.response.send_message("Use /job list/status/log/cancel", ephemeral=True)
-
-        @tree.command(name="skill", description="Skill management")
-        async def skill_slash(interaction: discord.Interaction, action: str = "list"):
-            cmd = f"/skill {action}"
-            result = await self.agent._dispatcher.dispatch(cmd, str(interaction.user.id), is_dm=False)
-            if result:
-                await interaction.response.send_message(result.text, ephemeral=True)
-            else:
-                await interaction.response.send_message("Use /skill list/info/use/run", ephemeral=True)
-
-        @tree.command(name="memory", description="Memory management")
-        async def memory_slash(interaction: discord.Interaction, action: str = "show"):
-            cmd = f"/memory {action}"
-            result = await self.agent._dispatcher.dispatch(cmd, str(interaction.user.id), is_dm=False)
-            if result:
-                await interaction.response.send_message(result.text, ephemeral=True)
-            else:
-                await interaction.response.send_message("Use /memory show/today/clear/note", ephemeral=True)
-
         logger.info(f"  setup_hook: bot={self.user}")
-        logger.info("  Slash commands registered")
 
     # ── Lifecycle ────────────────────────────────────────────────────────
 
