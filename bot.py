@@ -178,6 +178,23 @@ class CellClawBot(discord.Client):
         logger.info(f"✅ Logged in as {self.user} (id={self.user.id})")
         logger.info(f"   Connected to {len(self.guilds)} guild(s)")
         
+        # Kill any existing process on the API port first
+        try:
+            import subprocess
+            subprocess.run(['lsof', '-ti', ':19766'], capture_output=True)
+            result = subprocess.run(['lsof', '-ti', ':19766'], capture_output=True)
+            if result.stdout:
+                pids = result.stdout.decode().strip().split('\n')
+                for pid in pids:
+                    if pid:
+                        try:
+                            subprocess.run(['kill', '-9', pid])
+                            logger.info(f"Killed old process {pid} on port 19766")
+                        except:
+                            pass
+        except:
+            pass
+
         # Start Dashboard API servers
         try:
             from dashboard.start import start_api
