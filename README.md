@@ -4,7 +4,7 @@
 
 ⚠️ **Note:** This project is under active development. Some bugs may exist and will be fixed as quickly as possible.
 
-CellClaw is a Discord bot that lets you control remote Linux servers, HPC clusters, and workstations through natural language. Built for bioinformatics researchers who want to run scRNA-seq, CellChat, DEG analysis and more — without leaving Discord.
+CellClaw is a Discord bot that lets you control remote Linux servers, HPC clusters, and workstations through natural language. Built for bioinformatics researchers who want to run scRNA-seq, CellChat, DEG analysis, Visualization and more — without leaving Discord.
 
 **Key Features:**
 - **OpenClaw Integration** — Can work as an agent within OpenClaw's Discord group chats
