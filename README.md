@@ -195,7 +195,7 @@ bash install.sh  # Reinstall dependencies
 ---
 
 ## Discord Quick setup
-You will need to create a new application with a bot, add the bot to your server, and pair it to CellClaw. We recommend adding your bot to your own private server. If you don’t have one yet, create one first ([choose Create My Own > For me and my friends)(https://discord.com/developers/applications)].
+You will need to create a new application with a bot, add the bot to your server, and pair it to CellClaw. We recommend adding your bot to your own private server. If you don’t have one yet, create one first ([choose Create My Own > For me and my friends](https://discord.com/developers/applications)].
 
 ### 1.Create a Discord application and bot
 
