@@ -237,7 +237,10 @@ async def get_skills():
     import os
     from pathlib import Path
     
-    skills_dir = Path(__file__).parent.parent / "skills"
+    import os
+    # Use absolute path based on project root
+    project_root = os.environ.get('CELLCLAW_ROOT', '/Users/wzlmac/.openclaw/workspace-developer/bioinfo_analysis/CellClaw')
+    skills_dir = Path(project_root) / "skills"
     skills = []
     
     if skills_dir.exists():
