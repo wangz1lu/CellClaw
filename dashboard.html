@@ -351,16 +351,22 @@
     
     async function loadSkills() {
         console.log('Loading skills...');
-        // Hardcoded skills list
-        const skills = [
-            {id: 'annotation_sctype', name: 'Annotation — 细胞类型注释'},
-            {id: 'batch_harmony', name: 'Batch Correction — 批次校正'},
-            {id: 'ccc_cellchat', name: 'CellChat — 细胞通讯'},
-            {id: 'deg_analysis', name: 'DEG — 差异基因分析'},
-            {id: 'scRNA_seurat', name: 'scRNA Seurat — 单细胞分析(R)'},
-            {id: 'snRNA_scanpy', name: 'snRNA Scanpy — 单细胞分析(Python)'},
-            {id: 'visualization_R', name: 'Visualization — R 可视化'}
-        ];
+        let skills = [];
+        try {
+            const resp = await fetch('/static/skills.json');
+            skills = await resp.json();
+        } catch(e) {
+            console.log('Using fallback skills');
+            // Fallback hardcoded list
+            skills = [
+                {id: 'annotation_sctype', name: 'Annotation — 细胞类型注释'},
+                {id: 'batch_harmony', name: 'Batch Correction — 批次校正'},
+                {id: 'deg_analysis', name: 'DEG — 差异基因分析'},
+                {id: 'scRNA_seurat', name: 'scRNA Seurat — 单细胞分析(R)'},
+                {id: 'snRNA_scanpy', name: 'snRNA Scanpy — 单细胞分析(Python)'},
+                {id: 'visualization_R', name: 'Visualization — R 可视化'}
+            ];
+        }
         console.log('Skills:', skills);
         let html = '';
         for (const s of skills) {

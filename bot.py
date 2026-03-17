@@ -195,6 +195,13 @@ class CellClawBot(discord.Client):
         except:
             pass
 
+        # Generate skills.json from skills folder
+        try:
+            from dashboard.generate_skills import generate_skills
+            generate_skills()
+        except Exception as e:
+            logger.warning(f"Could not generate skills: {e}")
+
         # Start Dashboard API servers
         try:
             from dashboard.start import start_api
