@@ -1,7 +1,7 @@
 # CellClaw - Personal HPC AI Agent
 
 > **AI Bioinformatics Engineer on Discord — Remote HPC control via natural language**
-
+<img width="1376" height="768" alt="Gemini_Generated_Image_6i5wat6i5wat6i5w" src="https://github.com/user-attachments/assets/48881449-4a04-4a96-96bd-69ec97f5a58b" />
 ⚠️ **Note:** This project is under active development. Some bugs may exist and will be fixed as quickly as possible.
 
 CellClaw is a Discord bot that lets you control remote Linux servers, HPC clusters, and workstations through natural language. Built for bioinformatics researchers who want to run scRNA-seq, CellChat, DEG analysis, Visualization and more — without leaving Discord.
