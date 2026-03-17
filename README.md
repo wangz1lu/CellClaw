@@ -2,7 +2,15 @@
 
 > **AI Bioinformatics Engineer on Discord — Remote HPC control via natural language**
 
+⚠️ **Note:** This project is under active development. Some bugs may exist and will be fixed as quickly as possible.
+
 CellClaw is a Discord bot that lets you control remote Linux servers, HPC clusters, and workstations through natural language. Built for bioinformatics researchers who want to run scRNA-seq, CellChat, trajectory analysis and more — without leaving Discord.
+
+**Key Features:**
+- **OpenClaw Integration** — Can work as an agent within OpenClaw's Discord group chats
+- **SSH-based Remote Execution** — Execute bioinformatics analyses directly on remote HPC clusters via SSH
+- **Built-in Analysis Skills** — CellChat, DEG, Batch Correction, Visualization, and more
+- **Web Dashboard** — Monitor tasks, servers, and skills in real-time at http://127.0.0.1:7860
 
 ```
 You:       Run CellChat analysis on my Seurat object at ~/data/pbmc.rds
@@ -80,62 +88,49 @@ Features:
 
 ## 📋 Commands Reference
 
-### Server Management
+**Server Management**
 ```
-/server add   --name <id> --host <IP> --user <user> [--key <path>] [--port <port>] [--password true]
+/server add --name <id> --host <IP> --user <user> --port <port> [--key <path>] [--password true]
 /server list
-/server use   <name>
-/server test  [name]
-/server info  [name>
+/server use <name>
+/server test [name]
+/server info [name]
 /server remove <name>
 ```
 
-### Environment
+**Project**
 ```
-/env list
-/env use    <name>
-/env scan   <name>
-```
-
-### Project
-```
-/project set  <path>
-/project ls   [path]
-/project find [path]
+/project set <path>
+/project ls [path]
 /project info <file.h5ad>
 ```
 
-### Jobs
+**Job Management**
 ```
 /job list
-/job set    <description>      # Submit background task
+/job set <description> — Submit background job
 /job status <job_id>
-/job log    <job_id>
+/job log <job_id>
 /job cancel <job_id>
 ```
-💡 You can also say "挂后台" or "提交任务" to run tasks in background.
 
-### Skills
+**Skills**
 ```
-/skill list
-/skill info <skill_id>
-/skill use  <skill_id> <your request>
-/skill run  <skill_id> <your request>
-```
-💡 Just say "帮我跑细胞通讯" and bot will auto-activate the relevant skill.
-
-### Memory
-```
-/memory show              # View long-term memory
-/memory today             # View today's logs
-/memory clear            # Clear conversation history
-/memory note <content>   # Write to memory
+/skill list — List all installed skills
+/skill use <skill_id> <task> — Force activate skill
 ```
 
-### Other
+**Memory**
 ```
-/status   # Show current server and environment
-/help     # Show this help
+/memory show — View long-term memory
+/memory today — View today's logs
+/memory clear — Clear chat history
+/memory note <content> — Write to memory
+```
+
+**Session**
+```
+/status
 ```
 
 ---
