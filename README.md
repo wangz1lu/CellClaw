@@ -149,6 +149,7 @@ Built-in skills:
 | `batch_harmony` | Batch correction |
 | `visualization_R` | Visualization in R |
 
+Custom  skills:
 
 ---
 
