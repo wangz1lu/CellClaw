@@ -3,7 +3,8 @@
 > **AI Bioinformatics Engineer on Discord — Remote HPC control via natural language**
 <img width="1136" height="309" alt="cellclaw2" src="https://github.com/user-attachments/assets/3f4935b2-8030-4960-a302-4c3bee156e61" />
 
-⚠️ **Note:** This project is under active development. Some bugs may exist and will be fixed as quickly as possible.
+> [!WARNING]
+> This project is under active development. Some bugs may exist and will be fixed as quickly as possible.
 
 
 CellClaw is a personal AI assistant that puts the power of remote high-performance computing directly into your hands. It bridges the gap between complex infrastructure and natural language, allowing you to control Linux servers, HPC clusters, and workstations from the platforms where you already collaborate.
