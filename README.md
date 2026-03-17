@@ -1,4 +1,4 @@
-# CellClaw - Personal HPC AI Agent
+# 🧬 CellClaw - Personal HPC AI Agent
 
 > **AI Bioinformatics Engineer on Discord — Remote HPC control via natural language**
 <img width="1136" height="309" alt="cellclaw2" src="https://github.com/user-attachments/assets/3f4935b2-8030-4960-a302-4c3bee156e61" />
