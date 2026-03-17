@@ -1,168 +1,160 @@
 #!/usr/bin/env Rscript
-# ============================================================
-# OmicsClaw Skill: Cell Type Annotation
-# Template: 01_sctype_annotation.R
-# ============================================================
+# ==============================================================================
+# ScType Cell Type Annotation
+# ==============================================================================
 
+suppressPackageStartupMessages({
+  library(Seurat)
+  library(dplyr)
+  library(HGNChelper)
+  library(openxlsx)
+})
+
+# === Parse arguments ===
 args <- commandArgs(trailingOnly = TRUE)
-input_file  <- args[1] %||% "input.rds"
-output_dir  <- args[2] %||% "."
-method      <- args[3] %||% "sctype"    # sctype / singler
 
-cat("=== OmicsClaw: Cell Type Annotation ===\n")
-cat("输入:", input_file, "\n")
-cat("方法:", method, "\n\n")
+input_rds <- args[1] %||% "input.rds"
+output_rds <- args[2] %||% "result_sctype_annotated.rds"
+tissue <- args[3] %||% "Immune system"
+use_db <- as.logical(args[4]) %||% TRUE  # TRUE: use built-in DB, FALSE: use custom markers
+
+cat("========================================\n")
+cat("  ScType Cell Type Annotation\n")
+cat("========================================\n")
+cat("Input:", input_rds, "\n")
+cat("Tissue:", tissue, "\n")
+cat("========================================\n\n")
 
 `%||%` <- function(x, y) if (is.null(x)) y else x
 
-# ── 1. 加载库 ──────────────────────────────────────────────────
+# === 1. Load Data ===
+cat("[1/6] Loading Seurat object...\n")
+seu <- readRDS(input_rds)
+cat("  Cells:", ncol(seu), "\n")
+cat("  Clusters:", length(unique(Idents(seu))), "\n\n")
 
-suppressPackageStartupMessages({
-    library(Seurat)
-    library(dplyr)
-})
+# === 2. Load ScType functions ===
+cat("[2/6] Loading ScType functions...\n")
+source("https://raw.githubusercontent.com/IanevskiAleksandr/sc-type/master/R/gene_sets_prepare.R")
+source("https://raw.githubusercontent.com/IanevskiAleksandr/sc-type/master/R/sctype_score_.R")
 
-# ── 2. 加载数据 ────────────────────────────────────────────────
+# === 3. Prepare gene sets ===
+cat("[3/6] Preparing gene sets...\n")
 
-cat("Step 1: 加载数据...\n")
-seu <- readRDS(input_file)
-cat("  细胞数:", ncol(seu), "\n")
-cat("  Cluster 数:", length(unique(Idents(seu))), "\n")
-
-# ── 3. 定义 Marker ────────────────────────────────────────────
-
-cat("Step 2: 定义细胞类型 Marker...\n")
-
-gs_list <- list(
-    # T cells
-    "CD4+ T" = c("CD3D", "CD3E", "CD4", "IL7R"),
-    "CD8+ T" = c("CD3D", "CD3E", "CD8A", "GZMA"),
-    "NK" = c("NKG7", "GNLY", "KLRD1", "GZMB"),
-    
-    # B cells
-    "B cells" = c("CD79A", "CD79B", "MS4A1", "CD19"),
-    "Plasma" = c("IGJ", "XBP1", "MZB1"),
-    
-    # Myeloid
-    "Monocyte" = c("CD14", "FCGR3A", "LYZ", "S100A9"),
-    "Macrophage" = c("CD163", "MS4A4A", "CX3CR1", "MARCO"),
-    "DC" = c("CD1C", "FCER1A", "CST3", "CLEC9A"),
-    "Mast" = c("TPSAB1", "TPSB2", "MS4A2", "HDC"),
-    
-    # Other
-    "Proliferating" = c("MKI67", "TOP2A", "PCNA"),
-    "Platelet" = c("PPBP", "PF4", "SELPLG")
-)
-
-# ── 4. 尝试加载 scType ────────────────────────────────────────
-
-annotation_result <- NULL
-
-if (method == "sctype") {
-    cat("Step 3: 运行 scType 注释...\n")
-    tryCatch({
-        library(scType)
-        
-        expr <- GetAssayData(seu, slot = "data")
-        
-        # 运行 scType
-        result <- scType(expression_matrix = expr, gs_list = gs_list, species = "Human")
-        
-        annotation_result <- result$cell_type
-        names(annotation_result) <- colnames(seu)
-        
-        seu$celltype_sctype <- annotation_result
-        cat("  scType 完成！\n")
-    }, error = function(e) {
-        cat("  scType 加载失败:", conditionMessage(e), "\n")
-        cat("  回退到 Manual 注释...\n")
-        method <- "manual"
-    })
-}
-
-# ── 5. Manual 注释 ────────────────────────────────────────────
-
-if (method == "manual" || is.null(annotation_result)) {
-    cat("Step 3: 运行 Manual 注释...\n")
-    
-    # 先找 marker
-    markers <- FindAllMarkers(seu, only.pos = TRUE, logfc.threshold = 0.5, min.pct = 0.25)
-    top10 <- markers %>% group_by(cluster) %>% top_n(10, avg_log2FC)
-    
-    # 简单规则注释（可根据实际情况修改）
-    cluster_annot <- character()
-    
-    for (cl in unique(Idents(seu))) {
-        cl_markers <- markers[markers$cluster == cl, ]
-        top_genes <- tolower(head(cl_markers$gene, 20))
-        
-        # 简单规则匹配
-        if (any(c("cd4", "il7r") %in% top_genes)) {
-            cluster_annot[as.character(cl)] <- "CD4+ T"
-        } else if (any(c("cd8a", "cd8b", "gzm") %in% top_genes)) {
-            cluster_annot[as.character(cl)] <- "CD8+ T"
-        } else if (any(c("cd79", "ms4a1", "cd19") %in% top_genes)) {
-            cluster_annot[as.character(cl)] <- "B cells"
-        } else if (any(c("cd14", "fcgr3a", "lyz") %in% top_genes)) {
-            cluster_annot[as.character(cl)] <- "Monocyte"
-        } else if (any(c("cd163", "cx3cr1", "ms4a4a") %in% top_genes)) {
-            cluster_annot[as.character(cl)] <- "Macrophage"
-        } else if (any(c("nkg7", "gnly", "klrd1") %in% top_genes)) {
-            cluster_annot[as.character(cl)] <- "NK"
-        } else if (any(c("mki67", "top2a", "pcna") %in% top_genes)) {
-            cluster_annot[as.character(cl)] <- "Proliferating"
-        } else {
-            cluster_annot[as.character(cl)] <- paste0("Unknown_", cl)
-        }
-    }
-    
-    seu$celltype_manual <- unname(cluster_annot[as.character(Idents(seu))])
-    cat("  Manual 注释完成！\n")
-}
-
-# ── 6. 统计 ──────────────────────────────────────────────────
-
-cat("\n=== 注释结果统计 ===\n")
-if (!is.null(seu$celltype_sctype)) {
-    print(table(seu$celltype_sctype))
+if (use_db) {
+  # Use built-in database
+  db_ <- "https://raw.githubusercontent.com/IanevskiAleksandr/sc-type/master/ScTypeDB_full.xlsx"
+  gs_list <- gene_sets_prepare(db_, tissue)
+  cat("  Loaded gene sets for:", tissue, "\n\n")
 } else {
-    print(table(seu$celltype_manual))
+  # Custom markers
+  gs_list <- list(
+    `T cells` = list(
+      positive = c("CD3D", "CD3E", "CD3G", "CD247", "CD2", "CD7"),
+      negative = c("CD79A", "MS4A1", "CD19")
+    ),
+    `B cells` = list(
+      positive = c("CD79A", "CD79B", "MS4A1", "CD19", "CD20"),
+      negative = c("CD3D", "CD3E", "NKG7")
+    ),
+    `NK cells` = list(
+      positive = c("NKG7", "GNLY", "KLRD1", "GZMA", "GZMB"),
+      negative = c("CD79A", "MS4A1")
+    ),
+    `Monocytes/Macrophages` = list(
+      positive = c("CD14", "CD68", "CD163", "MS4A4A", "CX3CR1"),
+      negative = c("CD3D", "CD79A")
+    ),
+    `DC` = list(
+      positive = c("FCER1A", "CD1C", "CST3", "TPSAB1"),
+      negative = c("CD3D", "CD79A")
+    ),
+    `Mast cells` = list(
+      positive = c("TPSAB1", "TPSB2", "MS4A2", "HDC"),
+      negative = c("CD3D", "CD79A")
+    ),
+    `Plasma cells` = list(
+      positive = c("IGJ", "XBP1", "MZB1", "DERL3"),
+      negative = c("CD3D", "CD79A")
+    ),
+    `Platelet` = list(
+      positive = c("PPBP", "PF4", "SELPLG", "ITGA2B"),
+      negative = c("CD3D", "CD79A")
+    )
+  )
+  cat("  Using custom markers\n\n")
 }
 
-# ── 7. 导出 ──────────────────────────────────────────────────
+# === 4. Prepare expression matrix ===
+cat("[4/6] Preparing expression matrix...\n")
+seurat_package_v5 <- isFALSE('counts' %in% names(attributes(seu[["RNA"]])))
 
-cat("Step 4: 导出结果...\n")
+scRNAseqData_scaled <- if (seurat_package_v5) {
+  as.matrix(seu[["RNA"]]$scale.data)
+} else {
+  as.matrix(seu[["RNA"]]@scale.data)
+}
+cat("  Expression matrix ready\n\n")
 
-# CSV
-annotation_df <- data.frame(
-    cell_id = colnames(seu),
-    cluster = Idents(seu),
-    celltype = seu$celltype_sctype %||% seu$celltype_manual,
-    UMAP_1 = seu@reductions$umap@cell.embeddings[,1],
-    UMAP_2 = seu@reductions$umap@cell.embeddings[,2]
+# === 5. Run ScType ===
+cat("[5/6] Running ScType annotation...\n")
+es.max <- sctype_score(
+  scRNAseqData = scRNAseqData_scaled,
+  scaled = TRUE,
+  gs = gs_list$gs_positive,
+  gs2 = gs_list$gs_negative
 )
-write.csv(annotation_df, file.path(output_dir, "result_celltype.csv"), row.names = FALSE)
 
-# RDS
-saveRDS(seu, file.path(output_dir, "result_seurat_annotated.rds"))
+# Merge by cluster
+cL_resutls <- do.call("rbind", lapply(unique(seu@meta.data$seurat_clusters), function(cl){
+  es.max.cl <- sort(rowSums(es.max[, rownames(seu@meta.data[seu@meta.data$seurat_clusters == cl, ])]), decreasing = TRUE)
+  head(data.frame(
+    cluster = cl,
+    type = names(es.max.cl),
+    scores = es.max.cl,
+    ncells = sum(seu@meta.data$seurat_clusters == cl)
+  ), 10)
+}))
 
-# ── 8. 可视化 ──────────────────────────────────────────────────
+# Get best match per cluster
+sctype_scores <- cL_resutls %>% group_by(cluster) %>% top_n(n = 1, wt = scores)
 
-cat("Step 5: 生成可视化...\n")
+# Set low confidence to "Unknown"
+sctype_scores$type[as.numeric(as.character(sctype_scores$scores)) < sctype_scores$ncells/4] <- "Unknown"
 
-celltype_col <- if (!is.null(seu$celltype_sctype)) "celltype_sctype" else "celltype_manual"
-
-# UMAP
-p1 <- DimPlot(seu, reduction = "umap", group.by = celltype_col, label = TRUE, repel = TRUE) +
-    ggtitle("Cell Type Annotation")
-ggsave(file.path(output_dir, "result_celltype_umap.png"), p1, width = 12, height = 8, dpi = 300)
-
-# Marker 热图
-marker_genes <- c("CD3D", "CD4", "CD8A", "CD79A", "MS4A1", "CD14", "CD163", "NKG7", "MKI67")
-marker_genes <- marker_genes[marker_genes %in% rownames(seu)]
-if (length(marker_genes) >= 5) {
-    p2 <- DoHeatmap(seu, features = marker_genes, group.by = celltype_col)
-    ggsave(file.path(output_dir, "result_marker_heatmap.png"), p2, width = 12, height = 8, dpi = 300)
+# Add to Seurat
+seu@meta.data$sctype_classification <- ""
+for(j in unique(sctype_scores$cluster)){
+  cl_type <- sctype_scores[sctype_scores$cluster == j, ]
+  seu@meta.data$sctype_classification[seu@meta.data$seurat_clusters == j] <- as.character(cl_type$type[1])
 }
 
-cat("\n=== 注释完成！===\n")
+cat("  Annotation complete\n")
+cat("  Results:\n")
+print(sctype_scores[, 1:3])
+cat("\n")
+
+# === 6. Save outputs ===
+cat("[6/6] Saving outputs...\n")
+saveRDS(seu, output_rds)
+
+# Save annotation table
+annotation_df <- data.frame(
+  cell_id = colnames(seu),
+  cluster = Idents(seu),
+  sctype_classification = seu$sctype_classification,
+  stringsAsFactors = FALSE
+)
+write.csv(annotation_df, "result_celltype_annotation.csv", row.names = FALSE)
+
+# Save scores
+write.csv(sctype_scores, "result_sctype_scores.csv", row.names = FALSE)
+
+cat("\n========================================\n")
+cat("  Analysis Complete!\n")
+cat("========================================\n")
+cat("Outputs:\n")
+cat("  -", output_rds, "\n")
+cat("  - result_celltype_annotation.csv\n")
+cat("  - result_sctype_scores.csv\n")
+cat("\n")
