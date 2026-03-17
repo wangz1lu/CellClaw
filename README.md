@@ -60,7 +60,7 @@ bash start.sh
 
 This will start:
 - Discord Bot
-- Dashboard (http://127.0.0.1:7860)
+- Dashboard
 
 ### Add your first server
 
@@ -82,7 +82,6 @@ Features:
 - **Tasks** — Monitor running and completed jobs
 - **Servers** — View server status and connections
 - **Skills** — Browse installed analysis skills
-- **Config** — Quick commands and configuration
 
 ---
 
