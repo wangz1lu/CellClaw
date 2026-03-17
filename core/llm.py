@@ -103,7 +103,7 @@ TOOL_SCHEMAS = [
                 "properties": {
                     "path": {
                         "type": "string",
-                        "description": "远程服务器上的完整文件路径。使用当前工作目录作为基础，例如：{workdir}/analyze.R。如不确定，直接用 /tmp/omics_script.R"
+                        "description": "远程服务器上的完整文件路径。使用当前工作目录作为基础，例如：{workdir}/analyze.R。如不确定，直接用 /tmp/cell_script.R"
                     },
                     "content": {
                         "type": "string",

@@ -349,7 +349,7 @@ def main():
 
     # Start Dashboard servers (API + WebSocket) in background
     try:
-        from omics_discord.gateway import CellClawGateway
+        from cell_discord.gateway import CellClawGateway
         # Note: Gateway not yet created, will start after
         logger.info("Dashboard servers will start with gateway")
     except ImportError as e:

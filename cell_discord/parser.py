@@ -48,7 +48,7 @@ class CommandParser:
         /server use mylab
         /env list
         /project set /data/pbmc/
-        /job log omics_abc123
+        /job log cell_abc123
     """
 
     # Maps (group, action) aliases → canonical form

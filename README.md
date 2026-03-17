@@ -40,7 +40,7 @@ CellClaw: 🧬 Reading skill knowledge base for cell-cell communication...
 
 ```bash
 git clone https://github.com/wangz1lu/CellClaw
-cd omicsclaw
+cd cellclaw
 bash install.sh
 ```
 

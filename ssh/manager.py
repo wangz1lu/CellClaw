@@ -275,8 +275,8 @@ class SSHManager:
         wd  = workdir or session.active_project_path or "~"
 
         job_id   = secrets.token_hex(3)  # 6-char hex
-        log_path = f"{wd}/omics_job_{job_id}.log"
-        tmux_name = f"omics_{job_id}"
+        log_path = f"{wd}/cell_job_{job_id}.log"
+        tmux_name = f"cell_{job_id}"
 
         # Wrap command through executor for env/workdir handling
         wrapped = self._executor._wrap_command(run_cmd, env, wd, conn=conn)

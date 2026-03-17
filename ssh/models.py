@@ -104,7 +104,7 @@ class ExecuteResult:
 @dataclass
 class RemoteJob:
     """Tracks a background (tmux) job on a remote server."""
-    job_id: str                         # e.g. "omics_abc123"
+    job_id: str                         # e.g. "cell_abc123"
     discord_user_id: str
     server_id: str
     tmux_session: str                   # tmux session name

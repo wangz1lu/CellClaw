@@ -8,8 +8,8 @@ Two modes:
   run_background()  — long-running jobs via tmux, non-blocking
 
 Background job lifecycle:
-  1. Write Python/bash script to /tmp/omics_<job_id>.py (or .sh)
-  2. Start tmux session: tmux new-session -d -s omics_<job_id>
+  1. Write Python/bash script to /tmp/cell_<job_id>.py (or .sh)
+  2. Start tmux session: tmux new-session -d -s cell_<job_id>
   3. Run inside tmux: conda run -n <env> python script.py > log 2>&1
   4. poll_job() checks: tmux has-session + tail log for "OMICS_DONE"/"OMICS_ERROR"
   5. Agent proactively polls and notifies Discord on completion
@@ -80,7 +80,7 @@ class RemoteExecutor:
         For multi-line code, writes to /tmp first.
         """
         if "\n" in code or len(code) > 200:
-            tmp_path = f"/tmp/omics_snippet_{secrets.token_hex(4)}.py"
+            tmp_path = f"/tmp/cell_snippet_{secrets.token_hex(4)}.py"
             await self._write_remote_file(conn, tmp_path, code)
             cmd = f"python3 {tmp_path}"
         else:
@@ -115,7 +115,7 @@ class RemoteExecutor:
             workdir:        working directory on remote
             result_patterns: glob patterns to collect results after completion
         """
-        job_id = f"omics_{secrets.token_hex(6)}"
+        job_id = f"cell_{secrets.token_hex(6)}"
         tmux_name = job_id
         work = workdir or "~"
         log_path = f"/tmp/{job_id}.log"
@@ -371,17 +371,17 @@ class RemoteExecutor:
         if ext == "py":
             return textwrap.dedent(f"""\
                 import sys, traceback
-                _omics_log = open({log_path!r}, 'a')
+                _cell_log = open({log_path!r}, 'a')
                 try:
                 {textwrap.indent(script, '    ')}
                     print("{_JOB_DONE_SENTINEL}", flush=True)
-                    _omics_log.write("{_JOB_DONE_SENTINEL}\\n")
+                    _cell_log.write("{_JOB_DONE_SENTINEL}\\n")
                 except Exception as _e:
                     traceback.print_exc()
-                    _omics_log.write("{_JOB_ERROR_SENTINEL}\\n")
+                    _cell_log.write("{_JOB_ERROR_SENTINEL}\\n")
                     sys.exit(1)
                 finally:
-                    _omics_log.close()
+                    _cell_log.close()
             """)
         elif ext == "sh":
             return (

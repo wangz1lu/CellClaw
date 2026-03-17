@@ -27,8 +27,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-from omics_discord.dispatcher import CommandDispatcher
-from omics_discord.result import CommandResult, ResultType
+from cell_discord.dispatcher import CommandDispatcher
+from cell_discord.result import CommandResult, ResultType
 from ssh.manager import SSHManager
 from ssh.models import JobStatus
 from .nl_router import NLRouter
@@ -438,7 +438,7 @@ class CellClawAgent:
         self, params: dict, discord_user_id: str
     ) -> AgentResponse:
         """Create a conda environment with the required packages."""
-        env_name = params.get("env_name", "omics_env")
+        env_name = params.get("env_name", "cell_env")
         framework = params.get("framework", "scanpy")
 
         if framework == "scanpy":
@@ -869,7 +869,7 @@ class CellClawAgent:
                     if workdir:
                         import hashlib, time
                         ts = int(time.time()) % 10000
-                        path = f"{workdir}/omics_script_{ts}.R"
+                        path = f"{workdir}/cell_script_{ts}.R"
                         logger.warning(f"write_file: path missing, using fallback: {path}")
                     else:
                         return "❌ write_file 工具缺少 path 参数，且当前工作目录未知"

@@ -27,7 +27,7 @@ Discord 用户消息
                     │
         ┌───────────▼───────────┐
         │   CommandDispatcher   │  ← /slash 指令路由
-        │   (omics_discord/)    │
+        │   (cell_discord/)    │
         └───────────┬───────────┘
                     │ 非slash消息
         ┌───────────▼───────────┐
@@ -78,7 +78,7 @@ Discord 用户消息
 
 ---
 
-### 2. Discord 交互层 — `omics_discord/`
+### 2. Discord 交互层 — `cell_discord/`
 | 文件 | 说明 |
 |------|------|
 | `dispatcher.py` | 指令分发器，全局 `/help` |
@@ -150,7 +150,7 @@ Discord 用户消息
 | `models.py` | 140 | 数据模型（ServerConfig/UserSession/RemoteJob等）|
 
 **后台任务机制：**
-- tmux session 命名：`omics_<hex6>`
+- tmux session 命名：`cell_<hex6>`
 - 完成标识：脚本末尾写入 `OMICS_JOB_DONE` / `OMICS_JOB_ERROR`
 - 轮询：Bot 每 5 秒检查 tmux 日志中的标识字符串
 - 完成后：自动 SFTP 下载结果文件 → Discord 推送
@@ -226,7 +226,7 @@ HTTPS_PROXY=http://127.0.0.1:7890
 
 **基础架构**
 - [x] 项目骨架搭建，模块化设计
-- [x] Discord Bot 启动（代理支持，omicsclaw#4633 在线）
+- [x] Discord Bot 启动（代理支持，cellclaw#4633 在线）
 - [x] 全局 `/help` + slash 指令路由系统
 
 **SSH 执行层（完整）**
@@ -294,10 +294,10 @@ cd bioinfo_analysis/CellClaw
 python3 -u bot.py
 
 # 后台运行（推荐）
-nohup python3 -u bot.py >> /tmp/omicsclaw_bot.log 2>&1 &
+nohup python3 -u bot.py >> /tmp/cellclaw_bot.log 2>&1 &
 
 # 查看日志
-tail -f /tmp/omicsclaw_bot.log
+tail -f /tmp/cellclaw_bot.log
 ```
 
 ---
