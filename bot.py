@@ -103,17 +103,30 @@ class CellClawBot(discord.Client):
             else:
                 await interaction.response.send_message("Use /server list/add/use/test/info/remove", ephemeral=True)
 
-        @self.tree.command(name="env", description="Environment management")
-        @app_commands.choices(action=[
-            app_commands.Choice(name="list - List all environments", value="list"),
-            app_commands.Choice(name="use - Switch environment", value="use"),
-            app_commands.Choice(name="scan - Scan a specific env", value="scan"),
-        ])
-        async def env_slash(interaction: discord.Interaction, action: app_commands.Choice[str] = None, name: str = None):
-            action = action.value if action else "list"
-            cmd = f"/env {action}"
-            if name:
-                cmd += f" {name}"
+        # /env subcommand group
+        env_group = app_commands.Group(name="env", description="Environment management")
+        
+        @env_group.command(name="list", description="List all environments")
+        async def env_list(interaction: discord.Interaction):
+            cmd = "/env list"
+            result = await self.agent._dispatcher.dispatch(cmd, str(interaction.user.id), is_dm=False)
+            await interaction.response.send_message(result.text if result else "Error", ephemeral=True)
+        
+        @env_group.command(name="use", description="Switch to an environment")
+        @app_commands.describe(name="Environment name (e.g., R-4.3.3)")
+        async def env_use(interaction: discord.Interaction, name: str):
+            cmd = f"/env use {name}"
+            result = await self.agent._dispatcher.dispatch(cmd, str(interaction.user.id), is_dm=False)
+            await interaction.response.send_message(result.text if result else "Error", ephemeral=True)
+        
+        @env_group.command(name="scan", description="Scan an environment")
+        @app_commands.describe(name="Environment name to scan")
+        async def env_scan(interaction: discord.Interaction, name: str):
+            cmd = f"/env scan {name}"
+            result = await self.agent._dispatcher.dispatch(cmd, str(interaction.user.id), is_dm=False)
+            await interaction.response.send_message(result.text if result else "Error", ephemeral=True)
+        
+        self.tree.add_command(env_group)
             result = await self.agent._dispatcher.dispatch(cmd, str(interaction.user.id), is_dm=False)
             if result:
                 await interaction.response.send_message(result.text, ephemeral=True)
