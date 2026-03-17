@@ -1,5 +1,5 @@
 """
-OmicsClaw SSH Layer
+CellClaw SSH Layer
 ===================
 Provides secure multi-user, multi-server SSH management for remote
 bioinformatics execution on Linux workstations / HPC clusters.

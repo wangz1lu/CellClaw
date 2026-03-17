@@ -6,7 +6,7 @@ languages: [R]
 triggers: [cellchat, ccc, 细胞通讯, cell communication, cell-cell communication, 配受体, ligand, receptor, 通讯网络]
 ---
 # Skill: CCC — CellChat v2
-# OmicsClaw Skill Knowledge Base
+# CellClaw Skill Knowledge Base
 # Version: 1.0.0
 # Author: CellClaw
 # Source: CellChat official tutorials (Suoqin Jin, jinworks/CellChat)

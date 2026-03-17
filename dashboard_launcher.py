@@ -14,7 +14,7 @@ def wait_api():
     return False
 
 if __name__ == "__main__":
-    print("🧬 OmicsClaw Dashboard")
+    print("🧬 CellClaw Dashboard")
     if not wait_api():
         print(f"❌ API not running on {API_PORT}. Start bot first.")
         sys.exit(1)

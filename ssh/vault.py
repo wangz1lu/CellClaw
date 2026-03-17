@@ -3,9 +3,9 @@ Credential Vault
 ================
 AES-256-GCM encryption for SSH passwords.
 SSH keys are stored as file paths (never contents) — the key file
-itself lives on the OmicsClaw host filesystem.
+itself lives on the CellClaw host filesystem.
 
-Storage: vault.json in the OmicsClaw data directory.
+Storage: vault.json in the CellClaw data directory.
 Master key: derived from a server-side secret via PBKDF2.
 """
 

@@ -1,1 +1,1 @@
-"""OmicsClaw package init"""
+"""CellClaw package init"""

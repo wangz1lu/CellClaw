@@ -6,7 +6,7 @@ languages: [R, Python]
 triggers: [gsea, go, kegg, enrichment, 富集, goenrich,ORA, overrepresentation, pathway, do, enrichr]
 ---
 # Skill: GSEA — GO/KEGG 富集分析
-# OmicsClaw Skill Knowledge Base
+# CellClaw Skill Knowledge Base
 # Version: 1.0.0
 # Author: CellClaw
 # Scope: 差异基因的功能富集分析

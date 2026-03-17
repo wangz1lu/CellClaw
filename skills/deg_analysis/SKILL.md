@@ -6,7 +6,7 @@ languages: [R, Python]
 triggers: [deg, dge, differential expression, 差异基因, findmarkers, mast, wilcox, t test, 比较基因]
 ---
 # Skill: DEG — 差异基因分析
-# OmicsClaw Skill Knowledge Base
+# CellClaw Skill Knowledge Base
 # Version: 1.0.0
 # Author: CellClaw
 # Scope: 单细胞差异表达分析（两组比较 / 多组比较）

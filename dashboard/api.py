@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-OmicsClaw REST API
+CellClaw REST API
 Provides endpoints for server and job status
 """
 
@@ -23,7 +23,7 @@ def init_api(ssh_manager, agent):
     _agent = agent
 
 
-app = FastAPI(title="OmicsClaw API", version="1.0.0")
+app = FastAPI(title="CellClaw API", version="1.0.0")
 
 
 # Models
@@ -60,7 +60,7 @@ class ChatResponse(BaseModel):
 # Endpoints
 @app.get("/")
 async def root():
-    return {"name": "OmicsClaw API", "version": "1.0.0"}
+    return {"name": "CellClaw API", "version": "1.0.0"}
 
 
 @app.get("/servers", response_model=List[ServerStatus])

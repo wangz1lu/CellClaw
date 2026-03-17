@@ -1,5 +1,5 @@
 """
-OmicsClaw Session Store
+CellClaw Session Store
 =======================
 Persistent conversation history per user, stored as JSONL transcripts.
 Mirrors OpenClaw's session model:

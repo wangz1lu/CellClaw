@@ -8,7 +8,7 @@ triggers: [关键词1, 关键词2, keyword_en, 中文触发词]
 ---
 
 # Skill: <名称>
-# OmicsClaw Skill Knowledge Base
+# CellClaw Skill Knowledge Base
 # Version: 1.0.0
 # Author: <你的名字>
 # Source: <官方教程链接>
@@ -90,7 +90,7 @@ result <- main_analysis(data, param1 = "default")
 ### Step 3: 可视化
 ```r
 # 可视化输出 — 文件名必须以 result_ 开头！
-# 这样 OmicsClaw 才能自动检测并发送到 Discord
+# 这样 CellClaw 才能自动检测并发送到 Discord
 
 # PNG（Discord 直接预览）
 ggsave("result_分析名_图名.png", plot = p, width = 10, height = 8, dpi = 300)

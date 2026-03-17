@@ -1,12 +1,12 @@
-# OmicsClaw: A Natural Language Interface for Remote Bioinformatics Analysis on Discord
+# CellClaw: A Natural Language Interface for Remote Bioinformatics Analysis on Discord
 
 ## Abstract
 
 **Background:** Bioinformatics analysis typically requires command-line expertise, limiting accessibility for researchers without programming skills. Running analyses on remote HPC clusters adds additional complexity.
 
-**Results:** We present OmicsClaw, a Discord bot that enables natural language-driven bioinformatics analysis on remote Linux servers and HPC clusters. Users can execute single-cell pipelines (CellChat, DEG, GSEA, etc.) by simply describing their needs in Chinese or English. OmicsClaw provides seamless SSH connectivity, Conda environment management, persistent memory, and a web dashboard for monitoring tasks and servers.
+**Results:** We present CellClaw, a Discord bot that enables natural language-driven bioinformatics analysis on remote Linux servers and HPC clusters. Users can execute single-cell pipelines (CellChat, DEG, GSEA, etc.) by simply describing their needs in Chinese or English. CellClaw provides seamless SSH connectivity, Conda environment management, persistent memory, and a web dashboard for monitoring tasks and servers.
 
-**Availability:** OmicsClaw is open source (MIT License) and freely available at https://github.com/wangz1lu/OmicsClaw
+**Availability:** CellClaw is open source (MIT License) and freely available at https://github.com/wangz1lu/CellClaw
 
 ---
 
@@ -21,7 +21,7 @@ Bioinformatics workflows often involve multiple steps executed on remote High-Pe
 
 These barriers significantly limit accessibility, especially for biologists without computational backgrounds. While several web-based bioinformatics platforms exist, they typically require account creation, payment, or have limited customization.
 
-We developed **OmicsClaw**, a Discord bot that provides a conversational interface to remote bioinformatics analysis. By leveraging large language models (LLMs), users can describe their analysis needs in natural language, and OmicsClaw translates these into executable code on configured remote servers.
+We developed **CellClaw**, a Discord bot that provides a conversational interface to remote bioinformatics analysis. By leveraging large language models (LLMs), users can describe their analysis needs in natural language, and CellClaw translates these into executable code on configured remote servers.
 
 ---
 
@@ -29,11 +29,11 @@ We developed **OmicsClaw**, a Discord bot that provides a conversational interfa
 
 ### 2.1 System Architecture
 
-OmicsClaw consists of four main components:
+CellClaw consists of four main components:
 
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│   Discord       │────►│   OmicsClaw      │────►│   Remote SSH   │
+│   Discord       │────►│   CellClaw      │────►│   Remote SSH   │
 │   (User UI)    │     │   (Bot + LLM)   │     │   (HPC)        │
 └─────────────────┘     └──────────────────┘     └─────────────────┘
                                │
@@ -53,7 +53,7 @@ OmicsClaw consists of four main components:
 
 ### 2.2 Natural Language Processing
 
-OmicsClaw uses LLMs (default: DeepSeek Chat) to:
+CellClaw uses LLMs (default: DeepSeek Chat) to:
 1. Parse user intent from natural language
 2. Generate bioinformatics code (R/Python)
 3. Execute scripts on remote servers
@@ -98,7 +98,7 @@ Each skill includes:
 
 ```
 User: 帮我做CellChat分析，数据在~/data/pbmc.rds
-OmicsClaw: 🔬 Reading CellChat skill knowledge base...
+CellClaw: 🔬 Reading CellChat skill knowledge base...
        📝 Writing analysis script...
        🚀 Submitting job on A100 server...
        ✅ Done! Found 847 interactions across 12 cell types.
@@ -108,7 +108,7 @@ OmicsClaw: 🔬 Reading CellChat skill knowledge base...
 
 ```
 User: cluster 2和cluster 3的差异基因是什么？
-OmicsClaw: 🔬 Running DEG analysis...
+CellClaw: 🔬 Running DEG analysis...
        ✅ Found 234 significant genes (padj < 0.05, log2FC > 0.5)
        Top markers: IL7R, CD8A, GZMA, NKG7...
 ```
@@ -124,7 +124,7 @@ Users can monitor running jobs via the built-in dashboard (http://localhost:7860
 
 ## 4. Discussion
 
-OmicsClaw demonstrates the potential of conversational interfaces for bioinformatics, making advanced analyses accessible without CLI expertise.
+CellClaw demonstrates the potential of conversational interfaces for bioinformatics, making advanced analyses accessible without CLI expertise.
 
 **Limitations:**
 - Dependent on LLM quality for code generation
@@ -141,7 +141,7 @@ OmicsClaw demonstrates the potential of conversational interfaces for bioinforma
 
 ## 5. Conclusion
 
-OmicsClaw provides an accessible, free alternative for running bioinformatics analyses on remote servers. By combining natural language processing with SSH automation, it bridges the gap between user intent and computational execution.
+CellClaw provides an accessible, free alternative for running bioinformatics analyses on remote servers. By combining natural language processing with SSH automation, it bridges the gap between user intent and computational execution.
 
 ---
 
@@ -157,7 +157,7 @@ OmicsClaw provides an accessible, free alternative for running bioinformatics an
 4. Gu Z, et al. (2022). clusterProfiler and enrichment可视化. *Genomics*.
 5. SingleR: automatic cell type annotation for single-cell RNA-seq.
 6. Wolf FA, et al. (2018). SCANPY: large-scale single-cell gene analysis. *Genome Biology*.
-7. https://github.com/wangz1lu/OmicsClaw
+7. https://github.com/wangz1lu/CellClaw
 
 ---
 

@@ -1,5 +1,5 @@
 """
-Data Models for OmicsClaw SSH Layer
+Data Models for CellClaw SSH Layer
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ class ServerConfig:
     owner_discord_id: str               # Which Discord user owns this entry
     port: int = 22
     auth_type: AuthType = AuthType.KEY
-    key_path: Optional[str] = None      # Path to private key on OmicsClaw host
+    key_path: Optional[str] = None      # Path to private key on CellClaw host
     password_token: Optional[str] = None  # Vault token (never plaintext)
     created_at: datetime = field(default_factory=datetime.now)
     last_used: Optional[datetime] = None

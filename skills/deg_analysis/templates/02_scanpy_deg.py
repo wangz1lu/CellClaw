@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ============================================================
-# OmicsClaw Skill: DEG Analysis (Python/Scanpy)
+# CellClaw Skill: DEG Analysis (Python/Scanpy)
 # Template: 01_basic_deg.py
 # ============================================================
 
@@ -11,7 +11,7 @@ import numpy as np
 from pathlib import Path
 
 # ── 参数设置 ─────────────────────────────────────────────────
-parser = argparse.ArgumentParser(description='OmicsClaw: DEG Analysis')
+parser = argparse.ArgumentParser(description='CellClaw: DEG Analysis')
 parser.add_argument('--input', '-i', default='input.h5ad', help='Input file (.h5ad)')
 parser.add_argument('--output', '-o', default='.', help='Output directory')
 parser.add_argument('--group', '-g', default='leiden', help='Group column for comparison')
@@ -22,7 +22,7 @@ parser.add_argument('--method', '-m', default='t-test',
                     help='Statistical method')
 args = parser.parse_args()
 
-print(f"=== OmicsClaw: DEG Analysis (Python) ===")
+print(f"=== CellClaw: DEG Analysis (Python) ===")
 print(f"输入: {args.input}")
 print(f"分组列: {args.group}")
 print(f"方法: {args.method}\n")

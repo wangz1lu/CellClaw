@@ -1,5 +1,5 @@
 #!/bin/bash
-# OmicsClaw Bot 启动脚本
+# CellClaw Bot 启动脚本
 # 使用 PID 文件防止多开
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -11,7 +11,7 @@ VENV_DIR="$SCRIPT_DIR/venv"
 if [ -f "$PID_FILE" ]; then
     OLD_PID=$(cat "$PID_FILE")
     if kill -0 "$OLD_PID" 2>/dev/null; then
-        echo "⚠️  OmicsClaw Bot 已在运行 (PID: $OLD_PID)"
+        echo "⚠️  CellClaw Bot 已在运行 (PID: $OLD_PID)"
         echo "   使用 ./stop.sh 停止，或 ./restart.sh 重启"
         exit 1
     else
@@ -54,7 +54,7 @@ else
     exit 1
 fi
 
-echo "🚀 启动 OmicsClaw Bot..."
+echo "🚀 启动 CellClaw Bot..."
 echo "   日志: $LOG_FILE"
 echo "   PID 文件: $PID_FILE"
 

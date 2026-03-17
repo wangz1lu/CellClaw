@@ -1,1 +1,1 @@
-# OmicsClaw Dashboard
+# CellClaw Dashboard

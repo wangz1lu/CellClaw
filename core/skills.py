@@ -1,5 +1,5 @@
 """
-OmicsClaw Skill System
+CellClaw Skill System
 =======================
 Skills are KNOWLEDGE BASES, not scripts to copy-paste.
 

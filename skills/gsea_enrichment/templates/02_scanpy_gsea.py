@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ============================================================
-# OmicsClaw Skill: GSEA Enrichment (Python)
+# CellClaw Skill: GSEA Enrichment (Python)
 # Template: 01_gsea_enrichment.py
 # ============================================================
 
@@ -12,7 +12,7 @@ import gseapy as gp
 from gseapy.plot import dotplot
 
 # ── 参数设置 ─────────────────────────────────────────────────
-parser = argparse.ArgumentParser(description='OmicsClaw: GSEA Enrichment')
+parser = argparse.ArgumentParser(description='CellClaw: GSEA Enrichment')
 parser.add_argument('--deg', '-d', default='result_deg_significant.csv', 
                     help='DEG result file')
 parser.add_argument('--input', '-i', default=None, 
@@ -26,7 +26,7 @@ parser.add_argument('--method', '-m', default='ora',
                     help='Enrichment method')
 args = parser.parse_args()
 
-print(f"=== OmicsClaw: GSEA Enrichment (Python) ===")
+print(f"=== CellClaw: GSEA Enrichment (Python) ===")
 print(f"输入: {args.deg}")
 print(f"物种: {args.species}")
 print(f"方法: {args.method}\n")

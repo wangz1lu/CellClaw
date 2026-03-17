@@ -1,5 +1,5 @@
 """
-OmicsClaw Agent — Core Entry Point
+CellClaw Agent — Core Entry Point
 =====================================
 Unified dispatcher: slash commands → SSH Manager
                     natural language → NL Router → SSH Manager
@@ -9,7 +9,7 @@ Architecture:
     Discord message
         │
         ▼
-    OmicsClawAgent.handle_message()
+    CellClawAgent.handle_message()
         ├── [slash cmd]   → CommandDispatcher → SSH layer
         ├── [file upload] → handle_upload()
         └── [NL text]     → NLRouter → intent → SSH layer → results
@@ -62,9 +62,9 @@ class AgentResponse:
     poll_secs: int = 0
 
 
-class OmicsClawAgent:
+class CellClawAgent:
     """
-    Main OmicsClaw agent.
+    Main CellClaw agent.
     Instantiated once; stateless per-message (state lives in SSHManager/Registry).
     """
 
@@ -85,7 +85,7 @@ class OmicsClawAgent:
         # Tracks active job polling tasks per user
         self._poll_tasks: dict[str, asyncio.Task] = {}
 
-        logger.info(f"OmicsClawAgent initialized | workspace={self._workspace}")
+        logger.info(f"CellClawAgent initialized | workspace={self._workspace}")
 
     # ------------------------------------------------------------------ #
     # Main entry point

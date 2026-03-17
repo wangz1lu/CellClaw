@@ -223,7 +223,7 @@ class CodeGenerator:
         return self._script_header(out_dir) + textwrap.dedent(f"""\
 
             print("=" * 50)
-            print("OmicsClaw scRNA-seq 完整分析流程")
+            print("CellClaw scRNA-seq 完整分析流程")
             print("流程：{steps_str}")
             print("=" * 50)
 
@@ -294,7 +294,7 @@ class CodeGenerator:
     def _script_qc(self, fp: str, out_dir: str) -> str:
         return self._script_header(out_dir) + textwrap.dedent(f"""\
 
-            print("OmicsClaw QC 分析")
+            print("CellClaw QC 分析")
             adata = sc.read_h5ad({fp!r})
             print(f"原始数据：{{adata.n_obs:,}} × {{adata.n_vars:,}}")
 
@@ -333,7 +333,7 @@ class CodeGenerator:
         """).strip()
         return self._script_header(out_dir) + textwrap.dedent(f"""\
 
-            print("OmicsClaw 聚类分析")
+            print("CellClaw 聚类分析")
             adata = sc.read_h5ad({fp!r})
 
             {_preprocess_comment}
@@ -353,7 +353,7 @@ class CodeGenerator:
     def _script_annotate(self, fp: str, info: dict, out_dir: str) -> str:
         return self._script_header(out_dir) + textwrap.dedent(f"""\
 
-            print("OmicsClaw 细胞类型注释")
+            print("CellClaw 细胞类型注释")
             adata = sc.read_h5ad({fp!r})
 
             cluster_cols = [c for c in adata.obs.columns if 'leiden' in c or 'louvain' in c]
@@ -383,7 +383,7 @@ class CodeGenerator:
     def _script_deg(self, fp: str, info: dict, out_dir: str) -> str:
         return self._script_header(out_dir) + textwrap.dedent(f"""\
 
-            print("OmicsClaw 差异表达分析")
+            print("CellClaw 差异表达分析")
             adata = sc.read_h5ad({fp!r})
 
             cluster_cols = [c for c in adata.obs.columns if 'leiden' in c or 'louvain' in c]
@@ -404,7 +404,7 @@ class CodeGenerator:
         return self._script_header(out_dir) + textwrap.dedent(f"""\
             import squidpy as sq
 
-            print("OmicsClaw 空间转录组分析")
+            print("CellClaw 空间转录组分析")
             adata = sc.read_h5ad({fp!r})
 
             sc.pp.normalize_total(adata, target_sum=1e4)
@@ -430,7 +430,7 @@ class CodeGenerator:
         return self._script_header(out_dir) + textwrap.dedent(f"""\
             import harmonypy as hm
 
-            print("OmicsClaw 批次整合（Harmony）")
+            print("CellClaw 批次整合（Harmony）")
             adata = sc.read_h5ad({fp!r})
 
             batch_cols = [c for c in adata.obs.columns if 'batch' in c.lower() or 'sample' in c.lower()]

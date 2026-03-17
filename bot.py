@@ -1,7 +1,7 @@
 """
-OmicsClaw Discord Gateway
+CellClaw Discord Gateway
 =========================
-Connects Discord (via discord.py) to OmicsClawAgent.
+Connects Discord (via discord.py) to CellClawAgent.
 
 Environment variables (or .env file):
     DISCORD_TOKEN   — Bot token
@@ -42,7 +42,7 @@ _PROJECT_ROOT = str(Path(__file__).parent)
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-from core.agent import OmicsClawAgent, AgentResponse
+from core.agent import CellClawAgent, AgentResponse
 
 
 # ── Configuration ──────────────────────────────────────────────────────────
@@ -64,9 +64,9 @@ intents.guild_messages  = True
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-class OmicsClawBot(discord.Client):
+class CellClawBot(discord.Client):
     """
-    Discord client that bridges discord.py events → OmicsClawAgent.
+    Discord client that bridges discord.py events → CellClawAgent.
     """
 
     def __init__(self, proxy: str = ""):
@@ -75,10 +75,10 @@ class OmicsClawBot(discord.Client):
         if proxy:
             kwargs["proxy"] = proxy
         super().__init__(**kwargs)
-        self.agent = OmicsClawAgent(workspace_dir=DATA_DIR)
+        self.agent = CellClawAgent(workspace_dir=DATA_DIR)
         self._download_dir = Path(tempfile.mkdtemp(prefix="omicsclaw_attachments_"))
         self._dm_pending_users: set[str] = set()
-        logger.info(f"OmicsClawBot created | data_dir={DATA_DIR} | proxy={proxy or 'none'}")
+        logger.info(f"CellClawBot created | data_dir={DATA_DIR} | proxy={proxy or 'none'}")
 
     async def setup_hook(self):
         # Register slash commands that call actual handlers
@@ -338,7 +338,7 @@ def main():
     if not token:
         raise RuntimeError(
             "Discord bot token not set.\n"
-            "Set DISCORD_TOKEN env variable or put it in OmicsClaw/.env file."
+            "Set DISCORD_TOKEN env variable or put it in CellClaw/.env file."
         )
 
     import ssl as _ssl
@@ -346,14 +346,14 @@ def main():
 
     # Start Dashboard servers (API + WebSocket) in background
     try:
-        from omics_discord.gateway import OmicsClawGateway
+        from omics_discord.gateway import CellClawGateway
         # Note: Gateway not yet created, will start after
         logger.info("Dashboard servers will start with gateway")
     except ImportError as e:
         logger.warning(f"Dashboard not available: {e}")
 
-    bot = OmicsClawBot(proxy=PROXY)
-    logger.info("Starting OmicsClaw Discord Gateway...")
+    bot = CellClawBot(proxy=PROXY)
+    logger.info("Starting CellClaw Discord Gateway...")
     bot.run(token, log_handler=None)
 
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ============================================================
-# OmicsClaw Skill: Batch Correction (Python/Harmony)
+# CellClaw Skill: Batch Correction (Python/Harmony)
 # Template: 01_harmony_batch.py
 # ============================================================
 
@@ -11,7 +11,7 @@ from pathlib import Path
 from harmony import harmonize
 
 # ── 参数设置 ─────────────────────────────────────────────────
-parser = argparse.ArgumentParser(description='OmicsClaw: Batch Correction with Harmony')
+parser = argparse.ArgumentParser(description='CellClaw: Batch Correction with Harmony')
 parser.add_argument('--input', '-i', default='input.h5ad', help='Input file (.h5ad)')
 parser.add_argument('--output', '-o', default='.', help='Output directory')
 parser.add_argument('--batch', '-b', default='batch', help='Batch column name')
@@ -19,7 +19,7 @@ parser.add_argument('--npcs', '-n', type=int, default=50, help='Number of PCs')
 parser.add_argument('--resolution', '-r', type=float, default=0.5, help='Cluster resolution')
 args = parser.parse_args()
 
-print(f"=== OmicsClaw: Batch Correction (Python/Harmony) ===")
+print(f"=== CellClaw: Batch Correction (Python/Harmony) ===")
 print(f"输入: {args.input}")
 print(f"批次列: {args.batch}")
 print(f"PCs: {args.npcs}")

@@ -1,5 +1,5 @@
 """
-OmicsClaw Discord Command Handlers
+CellClaw Discord Command Handlers
 ====================================
 Parses Discord messages/slash-style commands and routes them to SSHManager.
 

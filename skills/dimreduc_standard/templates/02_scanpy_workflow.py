@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ============================================================
-# OmicsClaw Skill: Standard DimRed & Clustering (Python/Scanpy)
+# CellClaw Skill: Standard DimRed & Clustering (Python/Scanpy)
 # Template: 01_standard_workflow.py
 # ============================================================
 
@@ -10,7 +10,7 @@ import pandas as pd
 from pathlib import Path
 
 # ── 参数设置 ─────────────────────────────────────────────────
-parser = argparse.ArgumentParser(description='OmicsClaw: Standard DimRed & Clustering')
+parser = argparse.ArgumentParser(description='CellClaw: Standard DimRed & Clustering')
 parser.add_argument('--input', '-i', default='input.h5ad', help='Input file')
 parser.add_argument('--output', '-o', default='.', help='Output directory')
 parser.add_argument('--npcs', '-n', type=int, default=50, help='Number of PCs')
@@ -21,7 +21,7 @@ parser.add_argument('--mt-prefix', default='^MT-', help='Mitochondrial gene patt
 parser.add_argument('--rb-prefix', default='^RP[SL]', help='Ribosomal gene pattern')
 args = parser.parse_args()
 
-print(f"=== OmicsClaw: Standard DimRed & Clustering (Python) ===")
+print(f"=== CellClaw: Standard DimRed & Clustering (Python) ===")
 print(f"输入: {args.input}")
 print(f"PCs: {args.npcs}")
 print(f"Resolution: {args.resolution}")

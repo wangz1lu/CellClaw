@@ -3,7 +3,7 @@ PID_FILE="/tmp/omicsclaw_bot.pid"
 if [ -f "$PID_FILE" ]; then
     PID=$(cat "$PID_FILE")
     if kill -0 "$PID" 2>/dev/null; then
-        kill "$PID" && echo "✅ OmicsClaw Bot 已停止 (PID: $PID)"
+        kill "$PID" && echo "✅ CellClaw Bot 已停止 (PID: $PID)"
     else
         echo "⚠️  进程不存在"
     fi

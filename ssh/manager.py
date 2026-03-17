@@ -1,7 +1,7 @@
 """
 SSH Manager — High-level Facade
 =================================
-The single entry point used by OmicsClawAgent for all SSH operations.
+The single entry point used by CellClawAgent for all SSH operations.
 Combines Registry, ConnectionManager, Executor, Detector, and Transfer
 into a clean, intent-oriented API.
 
@@ -431,7 +431,7 @@ class SSHManager:
     def get_session_summary(self, discord_user_id: str) -> str:
         session = self._registry.get_session(discord_user_id)
         servers = self._registry.list_servers(discord_user_id)
-        lines = [f"📊 **OmicsClaw 会话状态**"]
+        lines = [f"📊 **CellClaw 会话状态**"]
         lines.append(f"  🖥️  服务器：`{session.active_server_id or '未选择'}`（共 {len(servers)} 台）")
         lines.append(f"  📁 项目目录：`{session.active_project_path or '未设置'}`")
         lines.append(f"  🐍 conda 环境：`{session.active_conda_env or '未选择'}`")

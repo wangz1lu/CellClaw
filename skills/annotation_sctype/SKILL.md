@@ -6,7 +6,7 @@ languages: [R, Python]
 triggers: [annotation, 注释, celltype, sctype, celltypist, annotate, manual annotation, marker genes, 细胞类型]
 ---
 # Skill: Annotation — 细胞类型注释
-# OmicsClaw Skill Knowledge Base
+# CellClaw Skill Knowledge Base
 # Version: 1.0.0
 # Author: CellClaw
 # Scope: 单细胞细胞类型自动注释

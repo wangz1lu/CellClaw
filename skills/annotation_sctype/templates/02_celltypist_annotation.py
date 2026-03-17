@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ============================================================
-# OmicsClaw Skill: Cell Type Annotation (Python/CellTypist)
+# CellClaw Skill: Cell Type Annotation (Python/CellTypist)
 # Template: 01_celltypist_annotation.py
 # ============================================================
 
@@ -11,7 +11,7 @@ from pathlib import Path
 from celltypist import models, annotate
 
 # ── 参数设置 ─────────────────────────────────────────────────
-parser = argparse.ArgumentParser(description='OmicsClaw: Cell Type Annotation')
+parser = argparse.ArgumentParser(description='CellClaw: Cell Type Annotation')
 parser.add_argument('--input', '-i', default='input.h5ad', help='Input file (.h5ad)')
 parser.add_argument('--output', '-o', default='.', help='Output directory')
 parser.add_argument('--model', '-m', default='Immune_All_Low.pkl',
@@ -20,7 +20,7 @@ parser.add_argument('--majority-voting', action='store_true',
                     help='Use majority voting for cell-level prediction')
 args = parser.parse_args()
 
-print(f"=== OmicsClaw: Cell Type Annotation (Python) ===")
+print(f"=== CellClaw: Cell Type Annotation (Python) ===")
 print(f"输入: {args.input}")
 print(f"模型: {args.model}")
 print(f"Majority voting: {args.majority_voting}\n")

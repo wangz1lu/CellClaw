@@ -1,4 +1,4 @@
-# OmicsClaw Skill 开发指南
+# CellClaw Skill 开发指南
 
 ## 目录结构
 

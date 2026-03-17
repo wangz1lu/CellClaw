@@ -1,12 +1,12 @@
-# OmicsClaw 🧬
+# CellClaw 🧬
 
 > **AI Bioinformatics Engineer on Discord — Remote HPC control via natural language**
 
-OmicsClaw is a Discord bot that lets you control remote Linux servers, HPC clusters, and workstations through natural language. Built for bioinformatics researchers who want to run scRNA-seq, CellChat, trajectory analysis and more — without leaving Discord.
+CellClaw is a Discord bot that lets you control remote Linux servers, HPC clusters, and workstations through natural language. Built for bioinformatics researchers who want to run scRNA-seq, CellChat, trajectory analysis and more — without leaving Discord.
 
 ```
 You:       Run CellChat analysis on my Seurat object at ~/data/pbmc.rds
-OmicsClaw: 🧬 Reading skill knowledge base for cell-cell communication...
+CellClaw: 🧬 Reading skill knowledge base for cell-cell communication...
            📝 Writing analysis script to ~/jobs/cellchat_20260312.R
            🚀 Submitting job on A100 server...
            ✅ Done! Found 847 interactions across 12 cell types.
@@ -158,7 +158,7 @@ Built-in skills:
 ## 📁 Project Structure
 
 ```
-OmicsClaw/
+CellClaw/
 ├── bot.py                 # Discord bot entry
 ├── core/                  # Agent, LLM, skills
 ├── ssh/                   # SSH execution layer

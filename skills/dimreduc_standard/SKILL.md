@@ -6,7 +6,7 @@ languages: [R, Python]
 triggers: [umap, tsne, pca, clustering, 降维, 聚类, findclusters, louvain, leiden, seurat workflow]
 ---
 # Skill: DimReduc — 标准降维聚类
-# OmicsClaw Skill Knowledge Base
+# CellClaw Skill Knowledge Base
 # Version: 1.0.0
 # Author: CellClaw
 # Scope: 单细胞标准降维聚类流程

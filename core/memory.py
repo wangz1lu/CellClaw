@@ -1,5 +1,5 @@
 """
-OmicsClaw Memory System
+CellClaw Memory System
 ========================
 Per-user memory with three tiers (inspired by OpenClaw):
 
@@ -90,7 +90,7 @@ class UserMemory:
         # Create file with header if new
         if not path.exists():
             date = datetime.now(_TZ_SHANGHAI).strftime("%Y-%m-%d")
-            path.write_text(f"# OmicsClaw Memory — {date}\n\n", encoding="utf-8")
+            path.write_text(f"# CellClaw Memory — {date}\n\n", encoding="utf-8")
 
         entry = f"\n## [{now}]"
         if section:

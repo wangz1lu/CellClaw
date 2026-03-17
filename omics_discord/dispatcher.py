@@ -1,7 +1,7 @@
 """
 Discord Command Dispatcher
 ===========================
-The single entry point for all Discord command processing in OmicsClaw.
+The single entry point for all Discord command processing in CellClaw.
 
 Usage (from the Agent layer):
     dispatcher = CommandDispatcher(ssh_manager)
@@ -256,7 +256,7 @@ class CommandDispatcher:
 
     def _global_help(self) -> str:
         return (
-            "🧬 **OmicsClaw 命令帮助**\n\n"
+            "🧬 **CellClaw 命令帮助**\n\n"
             "**服务器管理**\n"
             "```\n"
             "/server add  --name <id> --host <IP> --user <用户名> --port <端口> [--key <路径>] [--password true]\n"

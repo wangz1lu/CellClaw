@@ -1,4 +1,4 @@
-# OmicsClaw 设计文档
+# CellClaw 设计文档
 
 > 版本：v1.0-beta | 最后更新：2026-03-11
 
@@ -21,7 +21,7 @@ Discord 用户消息
 ┌───────────────────────────────────────────────────────┐
 │                    bot.py (Gateway层)                  │
 │  discord.py Client ← proxy:7890 → Discord Gateway     │
-│  on_message → OmicsClawAgent.process()                │
+│  on_message → CellClawAgent.process()                │
 │  通知轮询：每5秒 pop_notification() → 推送完成结果      │
 └───────────────────┬───────────────────────────────────┘
                     │
@@ -69,7 +69,7 @@ Discord 用户消息
 ### 1. Gateway 层 — `bot.py`
 | 文件 | 说明 |
 |------|------|
-| `bot.py` | Discord Bot 入口，`OmicsClawBot(discord.Client)` |
+| `bot.py` | Discord Bot 入口，`CellClawBot(discord.Client)` |
 
 - 代理支持：`proxy=http://127.0.0.1:7890`（本地网络必需）
 - 文件上传：自动检测附件 → 下载 → 交给 Agent 处理
@@ -114,7 +114,7 @@ Discord 用户消息
 ### 3. Agent 核心层 — `core/`
 | 文件 | 行数 | 说明 |
 |------|------|------|
-| `agent.py` | ~620 | OmicsClawAgent 主控，意图路由 + 任务管理 |
+| `agent.py` | ~620 | CellClawAgent 主控，意图路由 + 任务管理 |
 | `llm.py` | ~210 | LLM 客户端，OpenAI兼容，支持代理 |
 | `nl_router.py` | ~160 | 自然语言意图解析（关键词/正则，中英双语）|
 | `code_generator.py` | ~460 | 动态生成 Python 分析脚本 |
@@ -191,7 +191,7 @@ Discord 用户消息
 ## 数据持久化
 
 ```
-data/                       # 默认: OmicsClaw/data/
+data/                       # 默认: CellClaw/data/
 ├── registry.json           # 服务器注册表（多用户）
 ├── sessions.json           # 用户会话状态
 ├── vault.json              # 加密凭证
@@ -290,7 +290,7 @@ HTTPS_PROXY=http://127.0.0.1:7890
 
 ```bash
 # 启动 Bot
-cd bioinfo_analysis/OmicsClaw
+cd bioinfo_analysis/CellClaw
 python3 -u bot.py
 
 # 后台运行（推荐）

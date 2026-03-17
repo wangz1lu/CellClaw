@@ -6,7 +6,7 @@ languages: [R, Python]
 triggers: [harmony, batch, integration, 批次, 校正, harmony integration, seurat integration, mnn, combat, scvi]
 ---
 # Skill: Batch — 批次校正
-# OmicsClaw Skill Knowledge Base
+# CellClaw Skill Knowledge Base
 # Version: 1.0.0
 # Author: CellClaw
 # Scope: 多批次单细胞数据整合与批次校正
