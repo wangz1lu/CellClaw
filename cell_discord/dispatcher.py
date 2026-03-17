@@ -77,7 +77,7 @@ class CommandDispatcher:
             return await self._route(cmd, discord_user_id)
         except Exception as e:
             logger.exception(f"Command dispatch error for {discord_user_id}: {message}")
-            return CommandResult.err(f"内部错误：{e}")
+            return CommandResult.err(f"Internal error：{e}")
 
     async def _route(
         self, cmd: ParsedCommand, discord_user_id: str
@@ -129,14 +129,14 @@ class CommandDispatcher:
         if action == "list":
             skills = loader.list_skills()
             if not skills:
-                return CommandResult.info("📭 暂无已安装的 Skill。")
+                return CommandResult.info("📭 No skills installed yet。")
             lines = ["🔬 **已安装的分析 Skill**\n"]
             for s in skills:
                 lines.append(f"**ID: `{s.skill_id}`** — {s.name}")
                 if s.scope:
-                    lines.append(f"  适用场景: {s.scope}")
+                    lines.append(f"  Scope: {s.scope}")
                 if s.triggers:
-                    lines.append(f"  触发词: {', '.join(s.triggers[:5])}")
+                    lines.append(f"  Triggers: {', '.join(s.triggers[:5])}")
                 scripts = s.list_templates()
                 if scripts:
                     lines.append(f"  模板脚本: `{'`, `'.join(scripts)}`")
@@ -152,12 +152,12 @@ class CommandDispatcher:
             if not skill_id:
                 return CommandResult.err(
                     "请指定 Skill ID：`/skill info <id>`\n"
-                    "用 `/skill list` 查看所有可用 Skill 及其 ID"
+                    "Use `/skill list` to see all available Skills and their IDs"
                 )
             skill = loader.get(skill_id)
             if not skill:
                 available = ", ".join(f"`{s}`" for s in loader.skill_ids())
-                return CommandResult.err(f"❌ 未找到 Skill: `{skill_id}`\n可用 ID: {available or '无'}")
+                return CommandResult.err(f"❌ Skill not found: `{skill_id}`\nAvailable IDs: {available or 'none'}")
             content = skill.load_full()
             if len(content) > 1700:
                 content = content[:1700] + f"\n\n...(内容过长，共{len(content)}字符)\n用 `/skill use {skill_id} <需求>` 让 Agent 读取完整知识库并分析"
@@ -174,12 +174,12 @@ class CommandDispatcher:
                 return CommandResult.err(
                     "用法：`/skill use <id> <你的需求>`\n"
                     "例如：`/skill use ccc_cellchat 帮我分析 F7.rds 的细胞通讯`\n"
-                    "用 `/skill list` 查看所有 Skill ID"
+                    "Use `/skill list` to see all Skill IDs"
                 )
             skill = loader.get(actual_id)
             if not skill:
                 available = ", ".join(f"`{s}`" for s in loader.skill_ids())
-                return CommandResult.err(f"❌ 未找到 Skill: `{actual_id}`\n可用 ID: {available or '无'}")
+                return CommandResult.err(f"❌ Skill not found: `{actual_id}`\nAvailable IDs: {available or 'none'}")
 
             if not user_task:
                 user_task = f"使用 {skill.name} 进行分析"
@@ -198,7 +198,7 @@ class CommandDispatcher:
                 "`/skill list` — 列出所有已安装的分析 Skill（含 ID）\n"
                 "`/skill info <id>` — 查看某个 Skill 的详细知识库\n"
                 "`/skill use <id> <需求>` — 强制激活 Skill 并让 Agent 执行\n\n"
-                '💡 **自然语言也可以自动触发 Skill**，说"帮我跑细胞通讯"无需显式命令'
+                '💡 **自然语言也可以自动触发 Skill**，说"帮我跑细胞通讯"none需显式命令'
             )
 
     async def _handle_memory_cmd(self, cmd: ParsedCommand, discord_user_id: str) -> CommandResult:
@@ -222,15 +222,15 @@ class CommandDispatcher:
             # Truncate for Discord 2000 char limit
             if len(content) > 1800:
                 content = content[:1800] + "\n...(内容过长，已截断)"
-            return CommandResult.info(f"🧠 **长期记忆（MEMORY.md）**\n\n{content}")
+            return CommandResult.info(f"🧠 **Long-term Memory (MEMORY.md)**\n\n{content}")
 
         elif action == "today":
             content = mem.read_today()
             if not content:
-                return CommandResult.info("📭 今日日志为空。")
+                return CommandResult.info("📭 Today's Log为空。")
             if len(content) > 1800:
                 content = content[:1800] + "\n...(已截断)"
-            return CommandResult.info(f"📅 **今日日志**\n\n{content}")
+            return CommandResult.info(f"📅 **Today's Log**\n\n{content}")
 
         elif action == "clear":
             mem.clear_history()
@@ -242,14 +242,14 @@ class CommandDispatcher:
                 return CommandResult.err("请提供笔记内容：`/memory note 你想记录的内容`")
             from datetime import datetime, timezone, timedelta
             ts = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M")
-            mem.append_memory(f"\n### [{ts}] 手动记录\n{note}")
-            return CommandResult.ok(f"✅ 已记录到长期记忆：{note[:100]}")
+            mem.append_memory(f"\n### [{ts}] Manual Note\n{note}")
+            return CommandResult.ok(f"✅ Saved to long-term memory：{note[:100]}")
 
         else:
             return CommandResult.info(
                 "**记忆管理命令：**\n"
                 "`/memory show` — 查看长期记忆\n"
-                "`/memory today` — 查看今日日志\n"
+                "`/memory today` — 查看Today's Log\n"
                 "`/memory clear` — 清除对话历史\n"
                 "`/memory note <内容>` — 手动添加笔记"
             )
@@ -290,12 +290,12 @@ class CommandDispatcher:
             '💡 也可直接说"挂后台"/"提交任务"让 Agent 后台执行\n\n'
             "**分析 Skill**\n"
             "```\n"
-            "/skill list                        — 列出所有已安装的 Skill（含 ID、触发词）\n"
+            "/skill list                        — 列出所有已安装的 Skill（含 ID、Triggers）\n"
             "/skill info <skill_id>             — 查看 Skill 完整知识库\n"
             "/skill use  <skill_id> <你的需求>  — 强制激活 Skill，Agent 直接执行\n"
             "/skill run  <skill_id> <你的需求>  — 同 /skill use\n"
             "```\n"
-            '💡 无需显式命令：直接说"帮我跑细胞通讯"会自动激活对应 Skill\n\n'
+            '💡 none需显式命令：直接说"帮我跑细胞通讯"会自动激活对应 Skill\n\n'
             "**记忆管理**\n"
             "```\n"
             "/memory show             — 查看我对你的长期记忆\n"

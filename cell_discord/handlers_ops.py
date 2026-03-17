@@ -70,7 +70,7 @@ class EnvCommandHandler:
         try:
             env = await self._mgr.scan_env(discord_user_id, name)
         except Exception as e:
-            return CommandResult.err(f"扫描失败：{e}")
+            return CommandResult.err(f"Scan failed：{e}")
 
         if not env.key_packages:
             return CommandResult.info(
@@ -89,7 +89,7 @@ class EnvCommandHandler:
         return (
             "🐍 **`/env` 命令帮助**\n"
             "```\n"
-            "/env list           # 列出服务器上所有 conda 环境\n"
+            "/env list           # 列出Server上所有 conda 环境\n"
             "/env use  <name>    # 设置当前分析使用的 conda 环境\n"
             "/env scan <name>    # 扫描环境内的生信包（scanpy/seurat等）\n"
             "```"
@@ -195,9 +195,9 @@ class ProjectCommandHandler:
             f"📊 **`{filepath}` 数据概览**",
             f"  - 细胞数：**{info.get('n_obs', '?'):,}**",
             f"  - 基因数：**{info.get('n_vars', '?'):,}**",
-            f"  - 注释列（obs）：{', '.join(obs_cols[:8]) or '无'}",
-            f"  - 嵌入（obsm）：{', '.join(obsm) or '无'}",
-            f"  - 基因示例：{', '.join(var_sample)}",
+            f"  - Annotation columns（obs）：{', '.join(obs_cols[:8]) or 'none'}",
+            f"  - Embeddings（obsm）：{', '.join(obsm) or 'none'}",
+            f"  - Gene examples：{', '.join(var_sample)}",
         ]
         if done:
             lines.append(f"\n**已完成的分析步骤：**\n" + "\n".join(done))
@@ -267,7 +267,7 @@ class JobCommandHandler:
             elapsed = job.elapsed()
             lines.append(
                 f"  {emoji} `{jid}` — {job.status.value} | "
-                f"耗时 {elapsed} | 服务器: {job.server_id}"
+                f"Time {elapsed} | Server: {job.server_id}"
             )
         lines.append("\n💡 使用 `/job log <job_id>` 查看运行日志")
         return CommandResult.info("\n".join(lines))
@@ -290,12 +290,12 @@ class JobCommandHandler:
         }
         status_text = status_map.get(job.status, job.status.value)
         lines = [
-            f"⚙️ **任务 `{job_id}` 状态**",
-            f"  状态：{status_text}",
-            f"  服务器：`{job.server_id}`",
+            f"⚙️ **任务 `{job_id}` Status**",
+            f"  Status：{status_text}",
+            f"  Server：`{job.server_id}`",
             f"  环境：`{job.conda_env or '默认'}`",
             f"  目录：`{job.workdir}`",
-            f"  已耗时：{job.elapsed()}",
+            f"  Elapsed：{job.elapsed()}",
         ]
 
         # For DONE jobs with result files, show them (stored after collection)
@@ -323,7 +323,7 @@ class JobCommandHandler:
             return CommandResult.err(f"未找到任务 `{job_id}`")
 
         if not log:
-            return CommandResult.info(f"⚙️ 任务 `{job_id}` 暂无日志输出。")
+            return CommandResult.info(f"⚙️ 任务 `{job_id}` 暂none日志输出。")
 
         # Truncate to fit Discord's 2000-char limit
         if len(log) > 1800:
@@ -343,9 +343,9 @@ class JobCommandHandler:
         if not job:
             return CommandResult.err(f"未找到任务 `{job_id}`")
         if job.discord_user_id != discord_user_id:
-            return CommandResult.err("你无权取消他人的任务")
+            return CommandResult.err("你none权取消他人的任务")
         if job.status != JobStatus.RUNNING:
-            return CommandResult.err(f"任务 `{job_id}` 当前状态为 `{job.status.value}`，无法取消")
+            return CommandResult.err(f"任务 `{job_id}` 当前Status为 `{job.status.value}`，none法取消")
 
         try:
             conn = await self._mgr._get_conn(discord_user_id, job.server_id)
@@ -361,7 +361,7 @@ class JobCommandHandler:
             "⚙️ **`/job` 命令帮助**\n"
             "```\n"
             "/job list                # 列出所有任务\n"
-            "/job status <job_id>     # 查看任务状态\n"
+            "/job status <job_id>     # 查看任务Status\n"
             "/job log    <job_id>     # 查看运行日志\n"
             "/job log    <job_id> -n 100  # 查看最后100行\n"
             "/job cancel <job_id>     # 取消运行中的任务\n"
