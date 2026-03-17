@@ -1,196 +1,369 @@
 ---
 name: Batch — 批次校正
-version: 1.0.0
-scope: 多批次单细胞数据整合与批次效应校正（Harmony / CCA / scVI / Seurat integration）
+version: 1.1.0
+scope: 多批次单细胞数据整合与批次效应校正
 languages: [R, Python]
-triggers: [harmony, batch, integration, 批次, 校正, harmony integration, seurat integration, mnn, combat, scvi]
+triggers: [harmony, batch, integration, 批次, 校正, bbknn, scvi, scanpy harmony, seurat harmony]
 ---
+
 # Skill: Batch — 批次校正
-# CellClaw Skill Knowledge Base
-# Version: 1.0.0
-# Author: CellClaw
-# Scope: 多批次单细胞数据整合与批次校正
-# Based on: Harmony, Seurat CCA/RC/RPCA, scVI (Python)
+
+## 1. 概述
+
+批次校正是将多个批次/样本的单细胞数据整合在一起，消除技术变异（批次效应），保留生物异质性。
+
+### 常用方法
+
+| 方法 | 语言 | 特点 |
+|------|------|------|
+| **Harmony** | R/Python | 基于 RNN，速度快，效果好 |
+| **BBKNN** | Python | 快速，适合大数据 |
+| **SCVI** | Python | 深度学习，基于 VAE |
+| **ingest** | Python | 标签映射，快速 |
 
 ---
 
-## 1. Skill 概述
+## 2. Part A: Harmony (R - Seurat)
 
-**批次校正（Batch Correction）** 用于消除不同样本/测序批次之间的技术变异，使多批次数据能够整合分析。
+### 2.1 原理
 
-### 适用场景
-| 场景 | 说明 |
-|------|------|
-| 多个样本整合 | 10X 多样本、多个lane |
-| 跨平台整合 | Smart-seq2 + 10X |
-| 跨物种整合 | 需要小心处理 |
-| 时间序列 | 不同时间点的样本 |
+Harmony 使用迭代的柔和聚类方法，通过最大似然估计来校正批次效应。
 
-### 工具要求
-- **R** ≥ 4.1.0
-- **Harmony**（`remotes::install_github('immunogenomics/harmony')`）
-- **Seurat** ≥ 5.0.0
-- **scVI**（Python，需要 GPU 推荐）
+### 2.2 安装
 
----
-
-## 2. 输入数据要求
-
-### 必需输入
-```
-多个样本的 Seurat 对象（或列表）
-批次标签：metadata 中的 batch 列
+```r
+# 安装 Harmony
+remotes::install_github("immunogenomics/harmony")
 ```
 
-### 支持的输入格式
-| 格式 | 处理方式 |
-|------|---------|
-| 多个 .rds 文件 | 分别读取后合并 |
-| 10X 目录列表 | 分别读取后合并 |
-| 已合并的 Seurat | 直接校正 |
+### 2.3 使用方法
 
-### ⚠️ 重要注意事项
-- **批次校正是有风险的** — 过度校正可能丢失生物信号
-- **先聚类再校正** 确认批次效应不是生物差异
-- **保留原始数据** 校正后也要保留一份未校正的
+#### 方法1：标准 Harmony 校正
 
----
-
-## 3. 方法对比
-
-| 方法 | 优点 | 缺点 | 适用场景 |
-|------|------|------|---------|
-| Harmony | 快，准，默认首选 | 保守 | 大多数场景 |
-| CCA | 可跨平台 | 慢，可能丢失信息 | Smart-seq + 10X |
-| RPCA | 比 CCA 快 | 效果略差 | 大数据 |
-| scVI | 深度学习，精度高 | 需要 GPU | 追求最佳效果 |
-
----
-
-## 4. 标准流程：Harmony（推荐）
-
-### Step 1: 合并数据
 ```r
 library(Seurat)
 library(harmony)
 
-# 方式 1: 多个 Seurat 合并
-seu.list <- lapply(sample_files, readRDS)
-seu.combined <- merge(seu.list[[1]], seu.list[-1], add.cell.ids = samples)
+# 读取并合并数据（假设已有 Seurat 对象）
+# 或者分别读取后合并
+seu <- readRDS("merged.rds")
 
-# 方式 2: 直接读取 10X
-samples <- c("SampleA", "SampleB", "SampleC")
-seu.list <- lapply(samples, function(s) {
-    tmp <- Read10X(paste0("data/", s))
-    CreateSeuratObject(tmp, project = s)
-})
-seu.combined <- merge(seu.list[[1]], seu.list[-1])
+# 添加批次标签（如果没有）
+seu$batch <- seu$orig.ident  # 或者其他批次列
+
+# Run Harmony
+seu <- RunPCA(seu, npcs = 30)
+seu <- RunHarmony(seu, group.by.vars = "batch")
+
+# 使用 Harmony 的 PCA 进行后续分析
+seu <- RunUMAP(seu, reduction = "harmony", dims = 1:30)
+seu <- FindNeighbors(seu, reduction = "harmony", dims = 1:30)
+seu <- FindClusters(seu, resolution = 0.8)
+
+# 可视化
+DimPlot(seu, reduction = "umap", group.by = "batch")
+DimPlot(seu, reduction = "umap", group.by = "seurat_clusters")
 ```
 
-### Step 2: 添加批次标签
-```r
-# 假设样本名作为批次
-seu.combined$batch <- seu.combined$orig.ident
+#### 方法2：多个对象合并后校正
 
-# 或手动设置
-seu.combined$batch <- c(rep("batch1", 3000), rep("batch2", 2500), rep("batch3", 2800))
+```r
+library(Seurat)
+library(harmony)
+
+# 读取多个样本
+obj1 <- readRDS("sample1.rds")
+obj2 <- readRDS("sample2.rds")
+obj3 <- readRDS("sample3.rds")
+
+# 添加批次标签
+obj1$batch <- "batch1"
+obj2$batch <- "batch2"
+obj3$batch <- "batch3"
+
+# 合并
+seu <- merge(obj1, c(obj2, obj3))
+
+# 标准化
+seu <- NormalizeData(seu)
+seu <- FindVariableFeatures(seu)
+seu <- ScaleData(seu)
+
+# Harmony 校正
+seu <- RunPCA(seu, npcs = 30)
+seu <- RunHarmony(seu, group.by.vars = "batch")
+
+# 后续分析
+seu <- RunUMAP(seu, reduction = "harmony", dims = 1:30)
 ```
 
-### Step 3: 标准预处理
+#### 方法3：分层校正（可选）
+
 ```r
-seu.combined <- NormalizeData(seu.combined)
-seu.combined <- FindVariableFeatures(seu.combined)
-seu.combined <- ScaleData(seu.combined)
-seu.combined <- RunPCA(seu.combined, npcs = 50)
+# 对特定变量进行分层 Harmony
+seu <- RunHarmony(seu, group.by.vars = "batch", theta = 2, lambda = 0.1)
+
+# 参数说明：
+# theta: 值越大，分割越严格（默认值 2）
+# lambda: 正则化参数（默认值 0.1）
+# max.iter: 最大迭代次数（默认值 10）
 ```
 
-### Step 4: Harmony 校正
-```r
-seu.combined <- RunHarmony(
-    seu.combined,
-    group.by.vars = "batch",      # 批次列
-    dims.use = 1:30,             # 用哪些 PC
-    theta = 2,                   # 校正强度，越大越激进
-    lambda = 1,                  # 正则化参数
-    sigma = 0.1,                # 邻居半径
-    nclust = 50,                 # 初始聚类数
-    tau = 0,                     # 0 = 硬分配
-    max.iter.cluster = 20,      # 最大迭代
-    max.iter.emb = 10,
-    method = "equal"             # equal / flexible
-)
+### 2.4 关键参数
 
-# 查看 Harmony 嵌入
-seu.combined <- RunUMAP(seu.combined, reduction = "harmony", dims = 1:30)
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `group.by.vars` | 必需 | 批次变量列名 |
+| `theta` | 2 | 柔软聚类阈值 |
+| `lambda` | 0.1 | 正则化参数 |
+| `max.iter` | 10 | 最大迭代次数 |
+| `sigma` | 0.1 | 高斯核宽度 |
+
+---
+
+## 3. Part B: Harmony (Python - Scanpy)
+
+### 3.1 安装
+
+```python
+pip install scanpy harmonypy
+# 或者
+pip install harmony
 ```
 
-### Step 5: 聚类
-```r
-seu.combined <- FindNeighbors(seu.combined, reduction = "harmony", dims = 1:30)
-seu.combined <- FindClusters(seu.combined, resolution = 0.5)
+### 3.2 使用方法
+
+#### 方法1：标准 Harmony 校正
+
+```python
+import scanpy as sc
+import harmonypy as hm
+
+# 加载数据
+adata = sc.read_h5ad('merged.h5ad')
+
+# 添加批次标签
+# adata.obs['batch'] = ...
+
+# PCA
+sc.pp.pca(adata, n_comps=50)
+
+# Harmony 校正
+hm.run_harmony(adata, 'batch', max_iter=10)
+
+# 使用 Harmony 结果
+sc.pp.neighbors(adata, use_rep='X_pca_harmony')
+sc.tl.umap(adata)
+
+# 可视化
+sc.pl.umap(adata, color=['batch'])
+sc.pl.umap(adata, color=['leiden'])
+```
+
+#### 方法2：使用 scanpy 的 harmony wrapper
+
+```python
+import scanpy as sc
+from scanpy.external.pp import harmony
+
+# 数据
+adata = sc.read_h5ad('merged.h5ad')
+sc.pp.pca(adata, n_comps=50)
+
+# Harmony
+harmony(adata, key='batch')
+
+# 后续分析
+sc.pp.neighbors(adata, use_rep='X_pca_harmony')
+sc.tl.umap(adata)
 ```
 
 ---
 
-## 5. Seurat Integration（备选）
+## 4. Part C: BBKNN (Python)
 
-### CCA（慢，跨平台）
-```r
-# 找 anchor
-anchors <- FindIntegrationAnchors(
-    object.list = seu.list,
-    dims = 1:30,
-    anchor.features = 2000,
-    k.anchor = 5
-)
+### 4.1 原理
 
-# 整合
-seu.integrated <- IntegrateData(anchors, dims = 1:30)
+BBKNN (Batch-Balanced kNN) 通过修改 kNN 图的构建方式来实现批次校正，比 Harmony 更快。
 
-# 后续
-seu.integrated <- ScaleData(seu.integrated)
-seu.integrated <- RunPCA(seu.integrated)
-seu.integrated <- RunUMAP(seu.integrated, dims = 1:30)
+### 4.2 安装
+
+```python
+pip install bbknn
 ```
 
-### RPCA（更快）
-```r
-# 快速模式
-anchors <- FindIntegrationAnchors(
-    object.list = seu.list,
-    dims = 1:30,
-    reduction = "rpca",
-    k.anchor = 5
-)
-seu.integrated <- IntegrateData(anchors, dims = 1:30)
+### 4.3 使用方法
+
+#### 方法1：标准 BBKNN
+
+```python
+import scanpy as sc
+import bbknn
+
+# 加载数据
+adata = sc.read_h5ad('merged.h5ad')
+
+# PCA
+sc.pp.pca(adata, n_comps=50)
+
+# BBKNN 校正
+bbknn.bbknn(adata, batch_key='batch', n_pcs=50)
+
+# UMAP
+sc.tl.umap(adata)
+
+# 可视化
+sc.pl.umap(adata, color=['batch'])
+sc.pl.umap(adata, color=['leiden'])
 ```
+
+#### 方法2：分层 BBKNN（按细胞类型）
+
+```python
+# 先聚类，再对每个 cluster 分别 BBKNN
+sc.pp.neighbors(adata, n_pcs=50)
+sc.tl.leiden(adata, resolution=0.3)
+
+# 对每个 cluster 分别 BBKNN
+bbknn.bbknn(adata, batch_key='batch', n_pcs=50, 
+            neighbors_within_batch=3, cluster_key='leiden')
+
+# 合并 cluster 后的邻居图
+sc.tl.umap(adata, spread=1., min_dist=0.3)
+```
+
+#### 方法3：使用 trim (去除批次特异连接)
+
+```python
+# trim 参数：每个细胞去除批次特异性最强的 k 个邻居
+bbknn.bbknn(adata, batch_key='batch', n_pcs=50, trim=15)
+```
+
+### 4.4 关键参数
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `batch_key` | 'batch' | 批次变量 |
+| `n_pcs` | 50 | PCA 维度 |
+| `neighbors_within_batch` | 3 | 每个批次保留的邻居数 |
+| `trim` | None | 去除批次特异连接数 |
+| `cluster_key` | None | 分层 BBKNN |
 
 ---
 
-## 6. 验证批次校正效果
+## 5. Part D: SCVI (Python)
 
-### 校正前 vs 校正后
-```r
-# 用原始 PCA
-p1 <- DimPlot(seu.combined, reduction = "pca", group.by = "batch")
-# 用 Harmony
-p2 <- DimPlot(seu.combined, reduction = "harmony", group.by = "batch")
+### 5.1 原理
 
-# 拼图
-p1 + p2
+SCVI (Single-cell Variational Inference) 使用变分自编码器 (VAE) 进行数据整合，可以建模批次效应和生物变异。
+
+### 5.2 安装
+
+```python
+# 推荐使用 conda
+conda install scvi-tools -c conda-forge
+
+# 或者 pip
+pip install scvi-tools
 ```
 
-### 批次效应指标
-```r
-# 1. kBET（批次效应测试）
-library(kBET)
-pca <- seu.combined@reductions$pca@cell.embeddings[,1:30]
-batch <- seu.combined$batch
-kbet_result <- kBET(pca, batch)
+### 5.3 使用方法
 
-# 2. PC regression（看批次方差）
-# 在 PC space 回归批次，看 R²
+#### 方法1：标准 SCVI
+
+```python
+import scanpy as sc
+import scvi
+
+# 设置 SCVI 背景
+scvi.settings.seed = 42
+
+# 加载数据
+adata = sc.read_h5ad('merged.h5ad')
+
+# 准备 SCVI 数据
+scvi.model.SCVI.setup_anndata(adata, batch_key='batch')
+
+# 训练模型
+model = scvi.model.SCVI(adata, n_layers=2, n_latent=30)
+model.train()
+
+# 获取整合后的 latent space
+adata.obsm["X_scVI"] = model.get_latent_representation()
+
+# 使用 SCVI 结果
+sc.pp.neighbors(adata, use_rep='X_scVI', n_neighbors=15)
+sc.tl.umap(adata)
+
+# 可视化
+sc.pl.umap(adata, color=['batch'])
+sc.pl.umap(adata, color=['leiden'])
 ```
+
+#### 方法2：SCANVI（带标签的半监督）
+
+```python
+import scanpy as sc
+import scvi
+from scvi.model import SCANVI
+
+# 先用 SCVI
+scvi.model.SCVI.setup_anndata(adata, batch_key='batch', labels_key='cell_type')
+model = scvi.model.SCVI(adata)
+model.train()
+
+# 转为 SCANVI（利用已有标签）
+scanvi_model = SCANVI.from_scvi_model(model, adata=adata)
+scanvi_model.train()
+
+# 预测
+adata.obs['scanvi_prediction'] = scanvi_model.predict()
+
+# 可视化
+sc.pl.umap(adata, color=['cell_type', 'scanvi_prediction'])
+```
+
+#### 方法3：只使用部分高变基因
+
+```python
+# 选择高变基因再训练（更快）
+sc.pp.highly_variable_genes(adata, n_top_genes=2000)
+adata = adata[:, adata.var.highly_variable]
+
+# 训练 SCVI
+scvi.model.SCVI.setup_anndata(adata, batch_key='batch')
+model = scvi.model.SCVI(adata)
+model.train()
+```
+
+### 5.4 关键参数
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `n_layers` | 2 | 编码器层数 |
+| `n_latent` | 30 | latent 维度 |
+| `n_epochs` | None | 训练轮数 |
+| `early_stopping` | True | 早停 |
+| `batch_key` | 'batch' | 批次变量 |
+
+---
+
+## 6. 方法对比与选择
+
+| 方法 | 速度 | 内存 | 适用场景 |
+|------|------|------|----------|
+| Harmony (R) | 中 | 中 | 标准整合，首选 |
+| Harmony (Python) | 快 | 中 | Python 流程 |
+| BBKNN | 快 | 低 | 大数据，快速探索 |
+| SCVI | 慢 | 高 | 需要深度学习建模 |
+| ingest | 快 | 低 | 有参考数据集 |
+
+### 选择建议
+
+- **大多数情况**：Harmony (R 或 Python)
+- **快速探索**：BBKNN
+- **需要概率模型**：SCVI
+- **有参考注释**：ingest
 
 ---
 
@@ -198,67 +371,63 @@ kbet_result <- kBET(pca, batch)
 
 **⚠️ 所有输出文件名必须以 `result_` 开头！**
 
+### R 输出
 ```r
-# 校正后的 Seurat
-saveRDS(seu.combined, "result_seurat_harmony.rds")
+# 保存校正后的对象
+saveRDS(seu, "result_harmony.rds")
 
-# Cluster 分配
-cluster_df <- data.frame(
-    cell_id = colnames(seu.combined),
-    batch = seu.combined$batch,
-    cluster = Idents(seu.combined),
-    UMAP_1 = seu.combined@reductions$umap@cell.embeddings[,1],
-    UMAP_2 = seu.combined@reductions$umap@cell.embeddings[,2]
+# 导出 UMAP 坐标
+umap_df <- data.frame(
+  cell_id = colnames(seu),
+  UMAP_1 = seu@reductions$umap@cell.embeddings[,1],
+  UMAP_2 = seu@reductions$umap@cell.embeddings[,2],
+  batch = seu$batch,
+  cluster = Idents(seu)
 )
-write.csv(cluster_df, "result_batch_integration.csv", row.names = FALSE)
+write.csv(umap_df, "result_umap_coordinates.csv", row.names = FALSE)
+```
 
-# 可视化
-png("result_batch_comparison.png", width = 14, height = 6, units = "in", res = 300)
-p1 <- DimPlot(seu.combined, reduction = "pca", group.by = "batch")
-p2 <- DimPlot(seu.combined, reduction = "harmony", group.by = "batch")
-p1 + p2
-dev.off()
+### Python 输出
+```python
+# 保存校正后的对象
+adata.write('result_integrated.h5ad')
 
-png("result_harmony_clusters.png", width = 10, height = 8, units = "in", res = 300)
-DimPlot(seu.combined, reduction = "umap", group.by = "seurat_clusters", label = TRUE)
-dev.off()
+# 导出 UMAP 坐标
+umap_df = pd.DataFrame({
+    'cell_id': adata.obs_names,
+    'UMAP_1': adata.obsm['X_umap'][:, 0],
+    'UMAP_2': adata.obsm['X_umap'][:, 1],
+    'batch': adata.obs['batch'],
+    'leiden': adata.obs['leiden']
+})
+umap_df.to_csv('result_umap_coordinates.csv', index=False)
 ```
 
 ---
 
-## 8. 常见问题
+## 8. 示例命令
 
-### Q1: 校正后cluster乱掉了
-**原因**: `theta` 太大，校正过度
-
-**解决**:
-```r
-seu.combined <- RunHarmony(seu.combined, group.by.vars = "batch", theta = 0.5)
 ```
+# R - Harmony
+帮我用Harmony整合batch1.rds, batch2.rds, batch3.rds
 
-### Q2: 批次效应仍然存在
-**原因**: 批次差异太大，或用了错误的方法
+# Python - Harmony
+用scanpy的harmony整合 ~/data/batch*.h5ad
 
-**解决**:
-- 检查原始数据质量
-- 尝试 CCA（跨平台）
-- 检查是否有生物差异被误判为批次
+# Python - BBKNN
+用BBKNN整合这几个样本
 
-### Q3: 不同方法的对比
-**解决**: 
-```r
-# 试试不同方法
-seu <- RunHarmony(...)
-seu <- RunUMAP(seu, reduction = "harmony")
-
-seu <- RunUMAP(seu, reduction = "pca")  # 对比
+# Python - SCVI
+用SCVI跑一下这个数据
 ```
 
 ---
 
 ## 9. 参考资料
 
-- Harmony: https://github.com/immunogenomics/harmony
-- Harmony paper: https://www.nature.com/articles/s41592-019-0619-0
-- Seurat Integration: https://satijalab.org/seurat/articles/integration_introduction.html
-- kBET: https://github.com/theislab/kBET
+- **Harmony**: https://github.com/immunogenomics/harmony
+- **Harmony Paper**: https://www.nature.com/articles/s41587-019-0199-9
+- **BBKNN**: https://github.com/Teichlab/bbknn
+- **SCVI**: https://scvi-tools.org/
+- **SCVI Paper**: https://www.nature.com/articles/s41592-021-01256-7
+- **Scanpy Integration**: https://scanpy.readthedocs.io/en/stable/tutorials/basics/integrating-data-using-ingest.html
