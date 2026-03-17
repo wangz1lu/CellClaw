@@ -374,3 +374,13 @@
         }
         document.getElementById('skillsList').innerHTML = html;
     }
+    
+    // Init
+    updateStatus();
+    loadJobs();
+    loadServers();
+    loadSkills();
+    setInterval(() => { updateStatus(); loadJobs(); loadServers(); loadSkills(); }, 5000);
+    </script>
+</body>
+</html>
