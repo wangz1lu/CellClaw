@@ -78,6 +78,8 @@ class CellClawBot(discord.Client):
         self.agent = CellClawAgent(workspace_dir=DATA_DIR)
         self._download_dir = Path(tempfile.mkdtemp(prefix="omicsclaw_attachments_"))
         self._dm_pending_users: set[str] = set()
+        # Create command tree manually
+        self.tree = app_commands.CommandTree(self)
         logger.info(f"CellClawBot created | data_dir={DATA_DIR} | proxy={proxy or 'none'}")
 
     async def setup_hook(self):
