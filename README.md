@@ -41,7 +41,7 @@ CellClaw: 🧬 Reading skill knowledge base for cell-cell communication...
 
 - Python 3.9+
 - A Discord bot token ([create one here](https://discord.com/developers/applications))  ([quick setup](#discord-quick-setup))
-- An LLM API key (DeepSeek recommended)
+- An LLM API key
 - SSH access to a Linux server
 
 ### Install
@@ -190,7 +190,6 @@ bash install.sh  # Reinstall dependencies
 
 - Inspired by [OpenClaw](https://github.com/openclaw/openclaw)
 - Built with [discord.py](https://github.com/Rapptz/discord.py) and [asyncssh](https://github.com/ronf/asyncssh)
-- LLM: [DeepSeek](https://platform.deepseek.com) (recommended)
 
 ---
 
