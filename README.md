@@ -151,23 +151,7 @@ Built-in skills:
 
 Custom  skills:
 
----
-
-## 📁 Project Structure
-
-```
-CellClaw/
-├── bot.py                 # Discord bot entry
-├── core/                  # Agent, LLM, skills
-├── ssh/                   # SSH execution layer
-├── dashboard/             # Web dashboard
-├── data/                  # Sessions, users, logs
-├── skills/               # Analysis skill templates
-├── install.sh           # Install script
-├── start.sh              # Start bot + dashboard
-├── stop.sh              # Stop bot
-└── requirements.txt     # Python dependencies
-```
+Add your skill under `skills/`
 
 ---
 
@@ -200,6 +184,15 @@ bash install.sh  # Reinstall dependencies
 /server test <server_name>
 ```
 
+---
+
+## Acknowledgements
+
+- Inspired by [BioClaw](https://github.com/Runchuan-BU/BioClaw) and [OpenClaw](https://github.com/openclaw/openclaw)
+- Built with [discord.py](https://github.com/Rapptz/discord.py) and [asyncssh](https://github.com/ronf/asyncssh)
+- LLM: [DeepSeek](https://platform.deepseek.com) (recommended)
+
+  
 ---
 
 License: MIT
