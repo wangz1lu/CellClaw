@@ -109,9 +109,11 @@ class CellClawBot(discord.Client):
             app_commands.Choice(name="use - Switch environment", value="use"),
             app_commands.Choice(name="scan - Scan a specific env", value="scan"),
         ])
-        async def env_slash(interaction: discord.Interaction, action: app_commands.Choice[str] = None):
+        async def env_slash(interaction: discord.Interaction, action: app_commands.Choice[str] = None, name: str = None):
             action = action.value if action else "list"
             cmd = f"/env {action}"
+            if name:
+                cmd += f" {name}"
             result = await self.agent._dispatcher.dispatch(cmd, str(interaction.user.id), is_dm=False)
             if result:
                 await interaction.response.send_message(result.text, ephemeral=True)
