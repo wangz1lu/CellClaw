@@ -335,53 +335,32 @@
     }
     
     async function loadServers() {
-        try {
-            const srvs = await apiGet('/servers');
-            if (!Array.isArray(srvs)) srvs = [];
-        } catch(e) { 
-            console.error('loadServers error:', e);
-            srvs = []; 
-        }
-        if (!srvs.length) {
-            document.getElementById('serversList').innerHTML = '<tr><td colspan="4" style="text-align:center;color:#555;padding:20px;">No servers configured</td></tr>';
+        console.log('Loading servers...');
+        const srvs = await apiGet('/servers');
+        console.log('Servers:', srvs);
+        if (!srvs || !Array.isArray(srvs) || !srvs.length) {
+            document.getElementById('serversList').innerHTML = '<tr><td colspan="4" style="text-align:center;color:#555;padding:20px;">No servers</td></tr>';
             return;
         }
         let html = '';
-        srvs.forEach(s => {
-            html += `
-                <tr>
-                    <td style="color:#CCC;font-weight:600;">${s.server_id}</td>
-                    <td><code>${s.host}</code></td>
-                    <td>${s.port}</td>
-                    <td><span class="card-badge ${s.online ? 'badge-done' : 'badge-failed'}">${s.online ? 'Online' : 'Offline'}</span></td>
-                </tr>
-            `;
-        });
+        for (const s of srvs) {
+            html += '<tr><td>' + s.server_id + '</td><td><code>' + s.host + '</code></td><td>' + s.port + '</td><td>' + (s.online ? '<span class="card-badge badge-done">Online</span>' : '<span class="card-badge badge-failed">Offline</span>') + '</td></tr>';
+        }
         document.getElementById('serversList').innerHTML = html;
     }
     
     async function loadSkills() {
-        // Fetch skills from API
-        try {
-            const skills = await apiGet('/skills');
-            console.log('Skills loaded:', skills);
-            if (!Array.isArray(skills)) skills = [];
-        } catch (e) {
-            console.error('loadSkills error:', e);
-            skills = [];
+        console.log('Loading skills...');
+        const skills = await apiGet('/skills');
+        console.log('Skills:', skills);
+        if (!skills || !Array.isArray(skills) || !skills.length) {
+            document.getElementById('skillsList').innerHTML = '<div style="color:#555;text-align:center;padding:20px;">No skills</div>';
+            return;
         }
         let html = '';
-        skills.forEach(s => {
-            html += `
-                <div class="skill-item">
-                    <div>
-                        <div class="skill-name">${s.name}</div>
-                        <div class="skill-scope">${s.scope}</div>
-                    </div>
-                    <span class="skill-id">${s.id}</span>
-                </div>
-            `;
-        });
+        for (const s of skills) {
+            html += '<div class="skill-item"><div><div class="skill-name">' + (s.name || s.id) + '</div></div><span class="skill-id">' + s.id + '</span></div>';
+        }
         document.getElementById('skillsList').innerHTML = html;
     }
     
