@@ -40,7 +40,7 @@ CellClaw: 🧬 Reading skill knowledge base for cell-cell communication...
 ### Prerequisites
 
 - Python 3.9+
-- A Discord bot token ([create one here](https://discord.com/developers/applications))
+- A Discord bot token ([create one here](https://discord.com/developers/applications))  ([Refer to the first 4 steps for a quick start in this link.](https://docs.openclaw.ai/channels/discord))
 - An LLM API key (DeepSeek recommended)
 - SSH access to a Linux server
 
@@ -83,6 +83,7 @@ Features:
 - **Servers** — View server status and connections
 - **Skills** — Browse installed analysis skills
 
+  
 ---
 
 ## 📋 Commands Reference
