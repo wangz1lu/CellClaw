@@ -188,7 +188,7 @@ bash install.sh  # Reinstall dependencies
 
 ## Acknowledgements
 
-- Inspired by [BioClaw](https://github.com/Runchuan-BU/BioClaw) and [OpenClaw](https://github.com/openclaw/openclaw)
+- Inspired by [OpenClaw](https://github.com/openclaw/openclaw)
 - Built with [discord.py](https://github.com/Rapptz/discord.py) and [asyncssh](https://github.com/ronf/asyncssh)
 - LLM: [DeepSeek](https://platform.deepseek.com) (recommended)
 
