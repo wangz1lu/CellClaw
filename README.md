@@ -40,7 +40,7 @@ CellClaw: 🧬 Reading skill knowledge base for cell-cell communication...
 ### Prerequisites
 
 - Python 3.9+
-- A Discord bot token ([create one here](https://discord.com/developers/applications))  ([Refer to the first 4 steps for a quick setup in this link.](##discord-quick-setup))
+- A Discord bot token ([create one here](https://discord.com/developers/applications))  ([Refer to the first 4 steps for a quick setup in this link.](#discord-quick-setup))
 - An LLM API key (DeepSeek recommended)
 - SSH access to a Linux server
 
