@@ -351,32 +351,20 @@
     
     async function loadSkills() {
         console.log('Loading skills...');
-        // Load from static JSON file (simpler than API)
-        let skills = [];
-        try {
-            const resp = await fetch('/skills.json');
-            skills = await resp.json();
-        } catch(e) {
-            console.error('Failed to load skills:', e);
-        }
+        // Hardcoded skills list
+        const skills = [
+            {id: 'annotation_sctype', name: 'Annotation — 细胞类型注释'},
+            {id: 'batch_harmony', name: 'Batch Correction — 批次校正'},
+            {id: 'ccc_cellchat', name: 'CellChat — 细胞通讯'},
+            {id: 'deg_analysis', name: 'DEG — 差异基因分析'},
+            {id: 'scRNA_seurat', name: 'scRNA Seurat — 单细胞分析(R)'},
+            {id: 'snRNA_scanpy', name: 'snRNA Scanpy — 单细胞分析(Python)'},
+            {id: 'visualization_R', name: 'Visualization — R 可视化'}
+        ];
         console.log('Skills:', skills);
-        if (!skills || !Array.isArray(skills) || !skills.length) {
-            document.getElementById('skillsList').innerHTML = '<div style="color:#555;text-align:center;padding:20px;">No skills</div>';
-            return;
-        }
         let html = '';
         for (const s of skills) {
-            html += '<div class="skill-item"><div><div class="skill-name">' + (s.name || s.id) + '</div></div><span class="skill-id">' + s.id + '</span></div>';
+            html += '<div class="skill-item"><div><div class="skill-name">' + s.name + '</div></div><span class="skill-id">' + s.id + '</span></div>';
         }
         document.getElementById('skillsList').innerHTML = html;
     }
-    
-    // Init
-    updateStatus();
-    loadJobs();
-    loadServers();
-    loadSkills();
-    setInterval(() => { updateStatus(); loadJobs(); loadServers(); loadSkills(); }, 5000);
-    </script>
-</body>
-</html>
