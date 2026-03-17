@@ -346,7 +346,7 @@
     async function loadSkills() {
         // Fetch skills from API
         try {
-            const resp = await fetch('/api/skills');
+            const resp = await fetch(API + '/skills');
             const skills = await resp.json();
         } catch (e) {
         let html = '';
