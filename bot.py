@@ -113,14 +113,12 @@ class CellClawBot(discord.Client):
             await interaction.response.send_message(result.text if result else "Error", ephemeral=True)
         
         @env_group.command(name="use", description="Switch to an environment")
-        @app_commands.describe(name="Environment name (e.g., R-4.3.3)")
         async def env_use(interaction: discord.Interaction, name: str):
             cmd = f"/env use {name}"
             result = await self.agent._dispatcher.dispatch(cmd, str(interaction.user.id), is_dm=False)
             await interaction.response.send_message(result.text if result else "Error", ephemeral=True)
         
         @env_group.command(name="scan", description="Scan an environment")
-        @app_commands.describe(name="Environment name to scan")
         async def env_scan(interaction: discord.Interaction, name: str):
             cmd = f"/env scan {name}"
             result = await self.agent._dispatcher.dispatch(cmd, str(interaction.user.id), is_dm=False)
