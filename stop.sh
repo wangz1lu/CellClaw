@@ -3,12 +3,12 @@ PID_FILE="/tmp/cellclaw_bot.pid"
 if [ -f "$PID_FILE" ]; then
     PID=$(cat "$PID_FILE")
     if kill -0 "$PID" 2>/dev/null; then
-        kill "$PID" && echo "✅ CellClaw Bot 已停止 (PID: $PID)"
+        kill "$PID" && echo "CellClaw Bot stopped (PID: $PID)"
     else
-        echo "⚠️  进程不存在"
+        echo "Process not found"
     fi
     rm -f "$PID_FILE"
 else
-    # 兜底：杀掉所有 bot.py 进程
-    pkill -f "python.*bot.py" && echo "✅ 已清理所有 bot.py 进程" || echo "⚠️  没有运行中的 Bot"
+    # Fallback: kill all bot.py processes
+    pkill -f "python.*bot.py" && echo "Cleaned up all bot.py processes" || echo "No running Bot found"
 fi
