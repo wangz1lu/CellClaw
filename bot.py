@@ -159,37 +159,49 @@ class CellClawBot(discord.Client):
 **CellClaw Commands**
 
 **Server Management**
+```
 /server add --name <id> --host <IP> --user <user> --port <port> [--key <path>] [--password true]
 /server list
 /server use <name>
 /server test [name]
 /server info [name]
 /server remove <name>
+```
 
 **Project**
+```
 /project set <path>
 /project ls [path]
 /project info <file.h5ad>
+```
 
 **Job Management**
+```
 /job list
 /job set <description> — Submit background job
 /job status <job_id>
 /job log <job_id>
 /job cancel <job_id>
+```
 
 **Skills**
+```
 /skill list — List all installed skills
 /skill use <skill_id> <task> — Force activate skill
+```
 
 **Memory**
+```
 /memory show — View long-term memory
 /memory today — View today's logs
 /memory clear — Clear chat history
 /memory note <content> — Write to memory
+```
 
 **Session**
+```
 /status
+```
 """
             await interaction.response.send_message(help_text, ephemeral=True)
 
