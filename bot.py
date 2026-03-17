@@ -84,18 +84,33 @@ class CellClawBot(discord.Client):
         logger.info(f"CellClawBot created | data_dir={DATA_DIR} | proxy={proxy or 'none'}")
 
     async def setup_hook(self):
-        # Register slash commands
+        # Register slash commands with choices
         @self.tree.command(name="server", description="Server management")
-        async def server_slash(interaction: discord.Interaction, action: str = "list"):
+        @app_commands.choices(action=[
+            app_commands.Choice(name="list - List all servers", value="list"),
+            app_commands.Choice(name="add - Add a new server", value="add"),
+            app_commands.Choice(name="use - Switch to a server", value="use"),
+            app_commands.Choice(name="test - Test server connection", value="test"),
+            app_commands.Choice(name="info - Show server info", value="info"),
+            app_commands.Choice(name="remove - Remove a server", value="remove"),
+        ])
+        async def server_slash(interaction: discord.Interaction, action: app_commands.Choice[str] = None):
+            action = action.value if action else "list"
             cmd = f"/server {action}"
             result = await self.agent._dispatcher.dispatch(cmd, str(interaction.user.id), is_dm=False)
             if result:
                 await interaction.response.send_message(result.text, ephemeral=True)
             else:
-                await interaction.response.send_message("Use /server add/list/use/test/info/remove", ephemeral=True)
+                await interaction.response.send_message("Use /server list/add/use/test/info/remove", ephemeral=True)
 
         @self.tree.command(name="env", description="Environment management")
-        async def env_slash(interaction: discord.Interaction, action: str = "list"):
+        @app_commands.choices(action=[
+            app_commands.Choice(name="list - List all environments", value="list"),
+            app_commands.Choice(name="use - Switch environment", value="use"),
+            app_commands.Choice(name="scan - Scan a specific env", value="scan"),
+        ])
+        async def env_slash(interaction: discord.Interaction, action: app_commands.Choice[str] = None):
+            action = action.value if action else "list"
             cmd = f"/env {action}"
             result = await self.agent._dispatcher.dispatch(cmd, str(interaction.user.id), is_dm=False)
             if result:
@@ -104,16 +119,31 @@ class CellClawBot(discord.Client):
                 await interaction.response.send_message("Use /env list/use/scan", ephemeral=True)
 
         @self.tree.command(name="job", description="Job management")
-        async def job_slash(interaction: discord.Interaction, action: str = "list"):
+        @app_commands.choices(action=[
+            app_commands.Choice(name="list - List all jobs", value="list"),
+            app_commands.Choice(name="set - Submit a background job", value="set"),
+            app_commands.Choice(name="status - Check job status", value="status"),
+            app_commands.Choice(name="log - View job log", value="log"),
+            app_commands.Choice(name="cancel - Cancel a job", value="cancel"),
+        ])
+        async def job_slash(interaction: discord.Interaction, action: app_commands.Choice[str] = None):
+            action = action.value if action else "list"
             cmd = f"/job {action}"
             result = await self.agent._dispatcher.dispatch(cmd, str(interaction.user.id), is_dm=False)
             if result:
                 await interaction.response.send_message(result.text, ephemeral=True)
             else:
-                await interaction.response.send_message("Use /job list/status/log/cancel", ephemeral=True)
+                await interaction.response.send_message("Use /job list/set/status/log/cancel", ephemeral=True)
 
         @self.tree.command(name="skill", description="Skill management")
-        async def skill_slash(interaction: discord.Interaction, action: str = "list"):
+        @app_commands.choices(action=[
+            app_commands.Choice(name="list - List all skills", value="list"),
+            app_commands.Choice(name="info - Show skill details", value="info"),
+            app_commands.Choice(name="use - Use a skill", value="use"),
+            app_commands.Choice(name="run - Run a skill", value="run"),
+        ])
+        async def skill_slash(interaction: discord.Interaction, action: app_commands.Choice[str] = None):
+            action = action.value if action else "list"
             cmd = f"/skill {action}"
             result = await self.agent._dispatcher.dispatch(cmd, str(interaction.user.id), is_dm=False)
             if result:
@@ -122,7 +152,14 @@ class CellClawBot(discord.Client):
                 await interaction.response.send_message("Use /skill list/info/use/run", ephemeral=True)
 
         @self.tree.command(name="memory", description="Memory management")
-        async def memory_slash(interaction: discord.Interaction, action: str = "show"):
+        @app_commands.choices(action=[
+            app_commands.Choice(name="show - View long-term memory", value="show"),
+            app_commands.Choice(name="today - View today's logs", value="today"),
+            app_commands.Choice(name="clear - Clear conversation history", value="clear"),
+            app_commands.Choice(name="note - Write a note", value="note"),
+        ])
+        async def memory_slash(interaction: discord.Interaction, action: app_commands.Choice[str] = None):
+            action = action.value if action else "show"
             cmd = f"/memory {action}"
             result = await self.agent._dispatcher.dispatch(cmd, str(interaction.user.id), is_dm=False)
             if result:
