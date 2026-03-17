@@ -1,413 +1,413 @@
 ---
 name: Visualization — R 可视化
-version: 1.0.0
-scope: R 语言 ggplot2 可视化
+version: 1.1.0
+scope: R 语言可视化 (ggplot2 + ComplexHeatmap)
 languages: [R]
-triggers: [ggplot2, visualization, plot, 可视化, 绘图, 图表, ggplot]
+triggers: [ggplot2, complexheatmap, visualization, plot, 可视化, 绘图, 图表, heatmap]
 ---
 
-# Skill: Visualization — R ggplot2
+# Skill: Visualization — R 可视化
+
+> Part 1: ggplot2 (见上一部分)
+> Part 2: ComplexHeatmap
+
+---
+
+# Part 2: ComplexHeatmap
 
 ## 1. 概述
 
-ggplot2 是 R 语言最强大的数据可视化包，基于 Grammar of Graphics 语法。
-
-### 核心概念
-
-| 概念 | 说明 |
-|------|------|
-| `ggplot()` | 初始化画布 |
-| `aes()` | 美学映射（x, y, color, fill 等） |
-| `geom_*()` | 几何对象（点、线、面等） |
-| `theme()` | 主题设置 |
-| `facet_*()` | 分面 |
+ComplexHeatmap 是 R 语言最强大的热图和基因组数据可视化包，支持：
+- 单热图和多热图
+- 行列注释
+- 聚类与分切
+- 自定义图形
+- 图例定制
 
 ---
 
 ## 2. 基础语法
 
 ```r
-# 基础结构
-ggplot(data, aes(x=变量1, y=变量2)) +
-  geom_类型() +
-  labs(title="标题", x="X轴", y="Y轴") +
-  theme_主题()
+library(ComplexHeatmap)
+library(circlize)
+
+# 基础热图
+Heatmap(mat)
 ```
 
-```r
-library(ggplot2)
+### 核心函数
 
-# 散点图示例
-ggplot(mtcars, aes(x=disp, y=mpg)) +
-  geom_point() +
-  labs(title="发动机排量 vs 里程", x="排量", y="英里/加仑")
+| 函数 | 说明 |
+|------|------|
+| `Heatmap()` | 创建单个热图 |
+| `HeatmapAnnotation()` | 创建行列注释 |
+| `rowAnnotation()` | 行注释（简写）|
+| `draw()` | 绘制热图 |
+| `Legend()` | 创建图例 |
+
+---
+
+## 3. 基础热图
+
+### 3.1 简单热图
+
+```r
+set.seed(123)
+mat <- matrix(rnorm(100), 10, 10)
+rownames(mat) <- paste0("row", 1:10)
+colnames(mat) <- paste0("col", 1:10)
+
+Heatmap(mat)
+```
+
+### 3.2 自定义颜色
+
+```r
+library(circlize)
+
+# 连续型颜色
+col_fun <- colorRamp2(c(-2, 0, 2), c("blue", "white", "red"))
+
+Heatmap(mat, name = "expression", col = col_fun)
+```
+
+### 3.3 聚类
+
+```r
+# 行和列都聚类
+Heatmap(mat, 
+        name = "mat",
+        cluster_rows = TRUE,
+        cluster_columns = TRUE)
+
+# 只聚类行
+Heatmap(mat, 
+        cluster_columns = FALSE)
+
+# 使用自定义距离方法
+Heatmap(mat, 
+        clustering_distance_rows = "pearson",
+        clustering_method = "ward.D")
+```
+
+### 3.4 分切热图
+
+```r
+# 按行分切
+Heatmap(mat, name = "mat", km = 2)
+
+# 按列分切
+Heatmap(mat, name = "mat", column_km = 2)
+
+# 自定义分切
+Heatmap(mat, name = "mat", row_split = rep(c("A", "B"), each = 5))
 ```
 
 ---
 
-## 3. 图形类型
+## 4. 注释 (Annotations)
 
-### 3.1 散点图 (Scatterplot)
+### 4.1 简单注释
 
 ```r
-# 基本散点图
-ggplot(midwest, aes(x=area, y=poptotal)) +
-  geom_point()
+# 列注释
+ha <- HeatmapAnnotation(
+  foo1 = runif(10),
+  bar1 = anno_barplot(runif(10))
+)
 
-# 添加颜色、大小映射
-ggplot(midwest, aes(x=area, y=poptotal, color=state, size=popdensity)) +
-  geom_point()
+Heatmap(mat, name = "mat", top_annotation = ha)
 
-# 添加平滑曲线
-ggplot(midwest, aes(x=area, y=poptotal)) +
-  geom_point() +
-  geom_smooth(method="loess", se=FALSE)
+# 行注释
+row_ha <- rowAnnotation(
+  foo2 = runif(10),
+  bar2 = anno_barplot(runif(10))
+)
 
-# 抖动点图 (jitter)
-ggplot(mpg, aes(x=cty, y=hwy)) +
-  geom_jitter(width=0.5, size=1)
-
-# 计数图 (count)
-ggplot(mpg, aes(x=cty, y=hwy)) +
-  geom_count()
+Heatmap(mat, name = "mat", right_annotation = row_ha)
 ```
 
-### 3.2 线图 (Line Plot)
+### 4.2 分类注释
 
 ```r
-# 时间序列线图
-ggplot(economics, aes(x=date, y=psavert)) +
-  geom_line()
+# 离散变量注释
+ha <- HeatmapAnnotation(
+  group = sample(c("A", "B", "C"), 10, replace = TRUE),
+  col = list(group = c(A = "red", B = "green", C = "blue"))
+)
 
-# 多条线
-ggplot(economics_long, aes(x=date, y=value, color=variable)) +
-  geom_line()
+Heatmap(mat, name = "mat", top_annotation = ha)
 ```
 
-### 3.3 条形图 (Bar Chart)
+### 4.3 连续变量注释
 
 ```r
-# 基本条形图
-ggplot(mpg, aes(x=manufacturer)) +
-  geom_bar()
+library(circlize)
+col_fun <- colorRamp2(c(0, 1), c("white", "red"))
 
-# 填充颜色
-ggplot(mpg, aes(x=manufacturer, fill=class)) +
-  geom_bar(width=0.5)
+ha <- HeatmapAnnotation(
+  score = runif(10),
+  col = list(score = col_fun)
+)
 
-# 排序条形图
-cty_mpg <- aggregate(mpg$cty, by=list(mpg$manufacturer), FUN=mean)
-cty_mpg <- cty_mpg[order(cty_mpg$x), ]
-ggplot(cty_mpg, aes(x=Group.1, y=x)) +
-  geom_bar(stat="identity", fill="tomato3")
+Heatmap(mat, name = "mat", top_annotation = ha)
 ```
 
-### 3.4 直方图 (Histogram)
+### 4.4 复杂注释函数
 
 ```r
-# 自动分箱
-ggplot(mpg, aes(x=displ)) +
-  geom_histogram()
+# 点注释
+anno_points()
 
-# 指定分箱数
-ggplot(mpg, aes(x=displ)) +
-  geom_histogram(bins=5)
+# 条形注释
+anno_barplot()
 
-# 分类直方图
-ggplot(mpg, aes(x=displ, fill=class)) +
-  geom_histogram(bins=10)
-```
+# 箱线图注释
+anno_boxplot()
 
-### 3.5 密度图 (Density Plot)
+# 简笔注释
+anno_simple()
 
-```r
-# 密度图
-ggplot(mpg, aes(x=cty)) +
-  geom_density()
-
-# 分组密度图
-ggplot(mpg, aes(x=cty, fill=factor(cyl))) +
-  geom_density(alpha=0.8)
-```
-
-### 3.6 箱线图 (Boxplot)
-
-```r
-# 基本箱线图
-ggplot(mpg, aes(x=class, y=cty)) +
-  geom_boxplot()
-
-# 带点
-ggplot(mpg, aes(x=class, y=cty)) +
-  geom_boxplot() +
-  geom_dotplot(binaxis='y', stackdir='center', dotsize=0.5)
-
-# 小提琴图
-ggplot(mpg, aes(x=class, y=cty)) +
-  geom_violin()
-```
-
-### 3.7 热图 (Heatmap)
-
-```r
-# 相关性热图
-library(ggcorrplot)
-corr <- cor(mtcars)
-ggcorrplot(corr, 
-           hc.order=FALSE, 
-           type="lower",
-           lab=TRUE,
-           colors=c("tomato2", "white", "springgreen3"))
-```
-
-### 3.8 面积图 (Area Plot)
-
-```r
-# 面积图
-ggplot(economics[1:100,], aes(x=date, y=psavert)) +
-  geom_area()
-
-# 堆叠面积图
-ggplot(df, aes(x=date, y=value, fill=variable)) +
-  geom_area()
-```
-
-### 3.9 饼图 (Pie Chart)
-
-```r
-# 饼图
-df <- table(mpg$class)
-df <- as.data.frame(df)
-ggplot(df, aes(x="", y=Freq, fill=Var1)) +
-  geom_bar(width=1, stat="identity") +
-  coord_polar(theta="y", start=0)
-```
-
-### 3.10 树图 (Treemap)
-
-```r
-library(treemapify)
-ggplot(G20, aes(area=gdp_mil_usd, fill=hdi, label=country)) +
-  geom_treemap() +
-  geom_treemap_text(fontface="italic", place="centre")
+# 空注释（用于占位）
+anno_empty()
 ```
 
 ---
 
-## 4. 高级图形
+## 5. 热图列表
 
-### 4.1 分面 (Faceting)
+### 5.1 水平拼接
 
 ```r
-# 按列分面
-ggplot(mpg, aes(x=displ, y=cty)) +
-  geom_point() +
-  facet_wrap(~class)
+ht1 <- Heatmap(mat[1:10, ], name = "ht1")
+ht2 <- Heatmap(mat[11:20, ], name = "ht2")
 
-# 按行和列分面
-ggplot(mpg, aes(x=displ, y=cty)) +
-  geom_point() +
-  facet_grid(year~class)
+ht1 + ht2
 ```
 
-### 4.2 哑铃图 (Dumbbell Plot)
+### 5.2 垂直拼接
 
 ```r
-library(ggalt)
-ggplot(health, aes(x=pct_2013, xend=pct_2014, y=Area)) +
-  geom_dumbbell(color="#a3c4dc", 
-                size=0.75,
-                point.colour.l="#0e668b")
+ht1 %v% ht2
 ```
 
-### 4.3 边际图 (Marginal Plot)
+### 5.3 调整对齐
 
 ```r
-library(ggExtra)
-g <- ggplot(mpg, aes(cty, hwy)) + geom_count() + geom_smooth(method="lm")
-
-# 边际直方图
-ggMarginal(g, type="histogram")
-
-# 边际箱线图
-ggMarginal(g, type="boxplot")
-
-# 边际密度图
-ggMarginal(g, type="density")
-```
-
-### 4.4 双向条形图 (Diverging Bars)
-
-```r
-# 偏离条形图
-ggplot(mtcars, aes(x=car, y=mpg_z, fill=mpg_type)) +
-  geom_bar(stat="identity") +
-  coord_flip()
-```
-
-### 4.5 棒棒糖图 (Lollipop)
-
-```r
-# 棒棒糖图
-ggplot(cty_mpg, aes(x=make, y=mileage)) +
-  geom_point(size=3) +
-  geom_segment(aes(x=make, xend=make, y=0, yend=mileage))
-```
-
-### 4.6 环形图 (Donut Chart)
-
-```r
-ggplot(df, aes(x=2, y=Freq, fill=Var1)) +
-  geom_bar(stat="identity") +
-  coord_polar(theta="y") +
-  xlim(0.5, 2.5)
-```
-
-### 4.7 时间序列日历热图
-
-```r
-library(zoo)
-ggplot(df, aes(x=week, y=weekday, fill=VIX.Close)) +
-  geom_tile(colour="white") +
-  facet_grid(year~monthf) +
-  scale_fill_gradient(low="red", high="green")
+# 热图列表自动调整行/列对齐
+ht_list <- ht1 + ht2 + rowAnnotation(...)
+draw(ht_list)
 ```
 
 ---
 
-## 5. 主题与美化
+## 6. 图例 (Legends)
 
-### 5.1 预设主题
+### 6.1 自定义图例
 
 ```r
-theme_set(theme_bw())      # 黑白主题
-theme_set(theme_classic()) # 经典主题
-theme_set(theme_minimal()) # 简约主题
-theme_set(theme_tufte())   # Tufte 主题
+library(circlize)
+col_fun <- colorRamp2(c(-2, 0, 2), c("blue", "white", "red"))
+
+# 创建图例
+lgd <- Legend(col_fun = col_fun, title = "Expression")
+
+# 绘制
+draw(ht, heatmap_legend = lgd)
 ```
 
-### 5.2 自定义主题
+### 6.2 图例位置
 
 ```r
-ggplot(mpg, aes(x=cty, y=hwy)) +
-  geom_point() +
-  theme(
-    plot.title = element_text(hjust=0.5, size=14, face="bold"),
-    axis.text.x = element_text(angle=45, vjust=0.6),
-    legend.position = "bottom"
-  )
+# 在右侧（默认）
+draw(ht, heatmap_legend_side = "right")
+
+# 在左侧
+draw(ht, heatmap_legend_side = "left")
+
+# 在底部
+draw(ht, heatmap_legend_side = "bottom")
 ```
 
-### 5.3 颜色
+### 6.3 多个图例
 
 ```r
-# 手动配色
-scale_fill_manual(values=c("red", "blue", "green"))
+lgd1 <- Legend(col_fun = col_fun, title = "Expr")
+lgd2 <- Legend(at = c("A", "B"), title = "Group")
 
-# 调色板
-scale_fill_brewer(palette="Set3")
-scale_fill_brewer(palette="Dark2")
-
-# 渐变色
-scale_fill_gradient(low="red", high="green")
-scale_fill_gradient2(low="red", mid="white", high="blue")
+draw(ht, 
+      heatmap_legend = lgd1, 
+      annotation_legend = lgd2)
 ```
 
 ---
 
-## 6. 单细胞数据可视化
+## 7. 图形装饰 (Decoration)
 
-### 6.1 Seurat 基础绘图
+### 7.1 添加文本
+
+```r
+ht <- Heatmap(mat, name = "mat")
+ht <- draw(ht)
+
+# 在热图主体上添加文本
+decorate_heatmap_body("mat", {
+  grid.text("label", 0.5, 0.5)
+})
+```
+
+### 7.2 添加边框
+
+```r
+# 在行名称处添加矩形
+decorate_row_names("mat", {
+  grid.rect(gp = gpar(fill = "red"))
+})
+```
+
+### 7.3 添加分割线
+
+```r
+# 在列 dendrogram 处添加分割
+decorate_column_dend("mat", {
+  grid.rect(x = 0.5, width = 0.5, 
+            gp = gpar(fill = "blue", alpha = 0.3))
+})
+```
+
+---
+
+## 8. 单细胞数据可视化
+
+### 8.1 标记基因热图
 
 ```r
 library(Seurat)
+library(ComplexHeatmap)
 
-# DimPlot - UMAP/t-SNE
-DimPlot(seu, reduction="umap")
-DimPlot(seu, reduction="umap", group.by="seurat_clusters")
-DimPlot(seu, reduction="umap", split.by="orig.ident")
+# 获取 marker 基因
+markers <- FindAllMarkers(seu, only.pos = TRUE, max.cells.per.ident = 100)
+top_markers <- markers %>% group_by(cluster) %>% top_n(20, avg_log2FC)
 
-# FeaturePlot - 基因表达
-FeaturePlot(seu, features=c("CD3D", "CD4", "CD8A"))
+# 提取表达矩阵
+mat <- GetAssayData(seu, slot = "data")[unique(top_markers$gene), ]
 
-# VlnPlot - 小提琴图
-VlnPlot(seu, features=c("CD3D", "CD4"))
+# 标准化
+mat <- scale(mat)
+mat <- mat[complete.cases(mat), ]
 
-# DoHeatmap - 热图
-DoHeatmap(seu, features=top_genes)
-
-# DotPlot - 点图
-DotPlot(seu, features=c("CD3D", "MS4A1"), group.by="seurat_clusters")
+# 绘制热图
+Heatmap(mat,
+        name = "expression",
+        cluster_rows = TRUE,
+        cluster_columns = TRUE,
+        show_row_names = TRUE,
+        show_column_names = FALSE)
 ```
 
-### 6.2 自定义 Seurat 绘图
+### 8.2 添加细胞类型注释
 
 ```r
-# 带边框的点图
-FeaturePlot(seu, features="CD3D", outline.color="black", outline.size=1)
+# 添加列注释（细胞类型）
+ha <- HeatmapAnnotation(
+  cell_type = Idents(seu),
+  col = list(cell_type = c("B" = "red", "T" = "blue", "NK" = "green"))
+)
 
-# 自定义颜色
-FeaturePlot(seu, features="CD3D", cols=c("lightgrey", "red"))
+Heatmap(mat,
+        name = "expression",
+        top_annotation = ha)
+```
 
-# 多基因
-FeaturePlot(seu, features=c("CD3D", "CD4", "CD8A"), ncol=2)
+### 8.3 多组学整合可视化
+
+```r
+# ATAC + RNA 整合
+ht_rna <- Heatmap(rna_mat, name = "RNA")
+ht_atac <- Heatmap(atac_mat, name = "ATAC")
+
+ht_rna + ht_atac
 ```
 
 ---
 
-## 7. 输出与保存
+## 9. 高级应用
+
+### 9.1 UpSet 图
 
 ```r
-# 保存为 PNG
-ggsave("plot.png", width=10, height=8, dpi=300)
+# 创建 UpSet 图
+UpSet(melist)
+```
 
+### 9.2 互动热图
+
+```r
+# 转换为互动版本
+library(InteractiveComplexHeatmap)
+makeInteractive(ht)
+```
+
+### 9.3 保存热图
+
+```r
 # 保存为 PDF
-ggsave("plot.pdf", width=10, height=8)
+pdf("heatmap.pdf")
+draw(ht)
+dev.off()
 
-# 保存最近画的图
-ggsave("last_plot.png")
+# 保存为 PNG
+png("heatmap.png", width = 3000, height = 2000, res = 300)
+draw(ht)
+dev.off()
 ```
 
 ---
 
-## 8. 示例命令
+## 10. 输出文件规范
 
-```
-# 基本散点图
-帮我画一个散点图，x是displacement，y是mpg
+**⚠️ 所有输出文件名必须以 `result_` 开头！**
 
-# 带颜色的散点图
-按cyl分颜色画一下
+```r
+# 保存为 PDF
+pdf("result_heatmap.pdf", width = 10, height = 8)
+draw(ht)
+dev.off()
 
-# 条形图
-按manufacturer画平均cty的条形图
+# 保存为 PNG
+png("result_heatmap.png", width = 3000, height = 2000, res = 300)
+draw(ht)
+dev.off()
 
-# 热图
-画一个mtcars的相关性热图
-
-# Seurat可视化
-帮我画一下UMAP和marker基因
+# 保存为 SVG
+svg("result_heatmap.svg", width = 10, height = 8)
+draw(ht)
+dev.off()
 ```
 
 ---
 
-## 9. 常用参数速查
+## 11. 示例命令
 
-| 函数 | 参数 | 说明 |
-|------|------|------|
-| `ggplot()` | data, aes() | 数据和美学映射 |
-| `geom_point()` | size, color, shape | 点的大小、颜色、形状 |
-| `geom_line()` | linetype, size | 线型、粗细 |
-| `geom_bar()` | stat, fill, width | 统计变换、填充、宽度 |
-| `labs()` | title, subtitle, x, y | 标题和轴标签 |
-| `theme()` | plot.title, legend.position | 主题元素 |
-| `scale_*_manual()` | values | 手动设置颜色/形状 |
-| `facet_wrap()` | ~变量 | 按变量分面 |
+```
+# 基础热图
+帮我画一个热图
+
+# 带注释
+加上细胞类型注释
+
+# 多热图
+把两个表达矩阵拼在一起
+
+# 保存
+保存为PDF
+```
 
 ---
 
-## 10. 参考资料
+## 12. 参考资料
 
-- **ggplot2 官网**: https://ggplot2.tidyverse.org
-- **R Graphics Cookbook**: https://r-graphics.org
-- **ggplot2 cheat sheet**: https://raw.githubusercontent.com/rstudio/cheatsheets/main/data-visualization.pdf
+- **ComplexHeatmap 官网**: https://jokergoo.github.io/ComplexHeatmap-reference/
+- **ComplexHeatmap 论文**: https://doi.org/10.1093/bioinformatics/btx313
+- **circlize 包**: https://jokergoo.github.io/circlize/
