@@ -324,7 +324,10 @@
     }
     
     async function loadServers() {
+        try {
         const srvs = await apiGet('/servers');
+        if (!Array.isArray(srvs)) srvs = [];
+        } catch(e) { srvs = []; }
         if (!srvs.length) {
             document.getElementById('serversList').innerHTML = '<tr><td colspan="4" style="text-align:center;color:#555;padding:20px;">No servers configured</td></tr>';
             return;
@@ -347,8 +350,13 @@
         // Fetch skills from API
         try {
             const resp = await fetch(API + '/skills');
+            if (!resp.ok) throw new Error('API error');
             const skills = await resp.json();
+            if (!Array.isArray(skills)) skills = [];
         } catch (e) {
+            console.error('loadSkills error:', e);
+            skills = [];
+        }
         let html = '';
         skills.forEach(s => {
             html += `
