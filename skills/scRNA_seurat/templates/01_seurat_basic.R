@@ -1,6 +1,7 @@
 #!/usr/bin/env Rscript
 # ==============================================================================
 # scRNA-seq Analysis using Seurat
+# Supports: 10X data, RDS files, h5 files
 # ==============================================================================
 
 suppressPackageStartupMessages({
@@ -14,37 +15,58 @@ suppressPackageStartupMessages({
 args <- commandArgs(trailingOnly = TRUE)
 
 input_path <- args[1]
-project_name <- ifelse(is.na(args[2]), "scRNA", args[2])
-min_cells <- as.integer(ifelse(is.na(args[3]), "3", args[3]))
-min_features <- as.integer(ifelse(is.na(args[4]), "200", args[4]))
-percent_mt <- as.numeric(ifelse(is.na(args[5]), "5", args[5]))
-normalization <- ifelse(is.na(args[6]), "LogNormalize", args[6])
-nfeatures <- as.integer(ifelse(is.na(args[7]), "2000", args[7]))
-dims <- as.integer(ifelse(is.na(args[8]), "30", args[8]))
-resolution <- as.numeric(ifelse(is.na(args[9]), "0.8", args[9]))
-reduction <- ifelse(is.na(args[10]), "umap", args[10])
-output_rds <- ifelse(is.na(args[11]), "result_seurat.rds", args[11])
+input_type <- ifelse(is.na(args[2]), "auto", args[2])
+project_name <- ifelse(is.na(args[3]), "scRNA", args[3])
+min_cells <- as.integer(ifelse(is.na(args[4]), "3", args[4]))
+min_features <- as.integer(ifelse(is.na(args[5]), "200", args[5]))
+percent_mt <- as.numeric(ifelse(is.na(args[6]), "5", args[6]))
+normalization <- ifelse(is.na(args[7]), "LogNormalize", args[7])
+nfeatures <- as.integer(ifelse(is.na(args[8]), "2000", args[8]))
+dims <- as.integer(ifelse(is.na(args[9]), "30", args[9]))
+resolution <- as.numeric(ifelse(is.na(args[10]), "0.8", args[10]))
+reduction <- ifelse(is.na(args[11]), "umap", args[11])
+output_rds <- ifelse(is.na(args[12]), "result_seurat.rds", args[12])
 
 cat("========================================\n")
 cat("  scRNA-seq Seurat Analysis\n")
 cat("========================================\n")
 cat("Input:", input_path, "\n")
+cat("Input type:", input_type, "\n")
 cat("Project:", project_name, "\n")
 cat("Normalization:", normalization, "\n")
 cat("PCA dims:", dims, "\n")
 cat("Resolution:", resolution, "\n")
 cat("========================================\n\n")
 
+# === Auto-detect input type ===
+if (input_type == "auto") {
+  if (grepl("\\.rds$", input_path, ignore.case = TRUE)) {
+    input_type <- "rds"
+  } else if (grepl("\\.h5$", input_path, ignore.case = TRUE)) {
+    input_type <- "h5"
+  } else {
+    input_type <- "10x"
+  }
+}
+cat("Detected input type:", input_type, "\n\n")
+
 # === 1. Load Data ===
 cat("[1/8] Loading data...\n")
 
-# Detect file type
-if (grepl("\\.h5$", input_path)) {
+if (input_type == "rds") {
+  cat("  Loading existing Seurat RDS object...\n")
+  seurat_obj <- readRDS(input_path)
+  cat("  Loaded from:", input_path, "\n")
+  
+} else if (input_type == "h5") {
+  cat("  Loading 10X h5 file...\n")
   data <- Read10X_h5(filename = input_path)
   seurat_obj <- CreateSeuratObject(counts = data, project = project_name, 
                                     min.cells = min_cells, min.features = min_features)
+  
 } else {
   # Assume 10X directory
+  cat("  Loading 10X directory...\n")
   data <- Read10X(data.dir = input_path)
   seurat_obj <- CreateSeuratObject(counts = data, project = project_name,
                                     min.cells = min_cells, min.features = min_features)
@@ -53,26 +75,34 @@ if (grepl("\\.h5$", input_path)) {
 cat("  Cells:", ncol(seurat_obj), "\n")
 cat("  Genes:", nrow(seurat_obj), "\n\n")
 
-# === 2. QC ===
-cat("[2/8] Quality control...\n")
-seurat_obj[["percent.mt"]] <- PercentageFeatureSet(seurat_obj, pattern = "^MT-")
-
-# Filter
-seurat_obj <- subset(seurat_obj, 
-                     nFeature_RNA > min_features & 
-                     percent.mt < percent_mt)
-
-cat("  After QC - Cells:", ncol(seurat_obj), "\n\n")
+# === 2. QC (only for new data, not RDS) ===
+if (input_type != "rds") {
+  cat("[2/8] Quality control...\n")
+  seurat_obj[["percent.mt"]] <- PercentageFeatureSet(seurat_obj, pattern = "^MT-")
+  
+  # Filter
+  seurat_obj <- subset(seurat_obj, 
+                       nFeature_RNA > min_features & 
+                       percent.mt < percent_mt)
+  
+  cat("  After QC - Cells:", ncol(seurat_obj), "\n\n")
+} else {
+  cat("[2/8] Skipping QC (using existing Seurat object)\n\n")
+}
 
 # === 3. Normalization ===
 cat("[3/8] Normalization:", normalization, "\n")
 
-if (normalization == "sctransform") {
-  seurat_obj <- SCTransform(seurat_obj, vars.to.regress = "percent.mt", verbose = FALSE)
-  cat("  Using SCTransform\n\n")
+if (input_type == "rds") {
+  cat("  Object already contains normalized data\n\n")
 } else {
-  seurat_obj <- NormalizeData(seurat_obj, normalization.method = "LogNormalize", scale.factor = 10000)
-  cat("  Using LogNormalize\n\n")
+  if (normalization == "sctransform") {
+    seurat_obj <- SCTransform(seurat_obj, vars.to.regress = "percent.mt", verbose = FALSE)
+    cat("  Using SCTransform\n\n")
+  } else {
+    seurat_obj <- NormalizeData(seurat_obj, normalization.method = "LogNormalize", scale.factor = 10000)
+    cat("  Using LogNormalize\n\n")
+  }
 }
 
 # === 4. Feature Selection ===
