@@ -231,6 +231,60 @@ async def chat(request: ChatRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/skills")
+async def get_skills():
+    """Get all available skills"""
+    import os
+    from pathlib import Path
+    
+    skills_dir = Path(__file__).parent.parent / "skills"
+    skills = []
+    
+    if skills_dir.exists():
+        for skill_path in skills_dir.iterdir():
+            if skill_path.is_dir() and (skill_path / "SKILL.md").exists():
+                skill_info = {
+                    "id": skill_path.name,
+                    "name": skill_path.name,
+                    "description": "",
+                    "triggers": [],
+                    "languages": []
+                }
+                
+                # Read SKILL.md
+                skill_md = (skill_path / "SKILL.md").read_text()
+                lines = skill_md.split('\n')
+                in_header = False
+                for line in lines:
+                    if line.startswith('---'):
+                        in_header = not in_header
+                        continue
+                    if in_header:
+                        if line.startswith('name:'):
+                            skill_info['name'] = line.split(':', 1)[1].strip()
+                        elif line.startswith('triggers:'):
+                            # Parse triggers
+                            triggers = []
+                            for l in lines[lines.index(line):]:
+                                if l.strip().startswith('- '):
+                                    triggers.append(l.strip()[2:])
+                                elif l.strip() and not l.strip().startswith('- '):
+                                    break
+                            skill_info['triggers'] = triggers
+                        elif line.startswith('languages:'):
+                            langs = []
+                            for l in lines[lines.index(line):]:
+                                if l.strip().startswith('- '):
+                                    langs.append(l.strip()[2:])
+                                elif l.strip() and not l.strip().startswith('- '):
+                                    break
+                            skill_info['languages'] = langs
+                
+                skills.append(skill_info)
+    
+    return skills
+
+
 @app.get("/stats")
 async def get_stats():
     """Get overall statistics"""
@@ -260,3 +314,21 @@ async def get_stats():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=19766)
+
+
+# Serve dashboard static files
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+import os
+
+static_dir = os.path.join(os.path.dirname(__file__), "static")
+if os.path.exists(static_dir):
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+    
+@app.get("/dashboard")
+async def dashboard():
+    """Serve dashboard"""
+    dashboard_path = os.path.join(static_dir, "dashboard.html")
+    if os.path.exists(dashboard_path):
+        return FileResponse(dashboard_path)
+    return {"error": "Dashboard not found"}
