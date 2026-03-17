@@ -1,264 +1,332 @@
 ---
 name: DEG — 差异基因分析
-version: 1.0.0
-scope: 单细胞差异表达分析（两组比较 / 多组比较）
+version: 1.1.0
+scope: 单细胞差异表达分析
 languages: [R, Python]
-triggers: [deg, dge, differential expression, 差异基因, findmarkers, mast, wilcox, t test, 比较基因]
+triggers: [deg, dge, differential expression, 差异基因, findmarkers, findallmarkers, rank_genes_groups, wilcox, mast, t test]
 ---
+
 # Skill: DEG — 差异基因分析
-# CellClaw Skill Knowledge Base
-# Version: 1.0.0
-# Author: CellClaw
-# Scope: 单细胞差异表达分析（两组比较 / 多组比较）
-# Based on: Seurat, MAST, presto, limma-voom
 
----
+## 1. 概述
 
-## 1. Skill 概述
+差异基因分析（Differential Gene Expression, DEG）用于识别不同细胞类型、cluster 或条件之间表达显著差异的基因。
 
-**差异基因分析（Differential Gene Expression, DEG）** 是单细胞数据分析的核心步骤，用于识别不同细胞类型、cluster 或条件之间表达显著差异的基因。
-
-### 适用场景
-| 场景 | 说明 |
+### 工具
+| 语言 | 函数 |
 |------|------|
-| Cluster vs Cluster | 识别特定 cluster 的 marker 基因 |
-| 细胞类型比较 | 疾病组 vs 对照组的差异表达 |
-| 条件刺激响应 | 处理前后差异基因 |
-| 时间序列 | 不同时间点的差异基因 |
-
-### 工具要求
-- **R** ≥ 4.1.0
-- **Seurat** ≥ 5.0.0（`remotes::install_github('satijalab/seurat')`）
-- 可选方法：`MAST`（`BiocManager::install("MAST")`）、`presto`（快）、`edgeR`、`DESeq2`（bulk 也可用）
+| R | `FindMarkers()`, `FindAllMarkers()` (Seurat) |
+| Python | `scanpy.tl.rank_genes_groups()` |
 
 ---
 
-## 2. 输入数据要求
+## 2. Part A: R — Seurat
 
-### 必需输入
-```
-数据矩阵：基因 × 细胞，归一化后（log1p）
-细胞注释：metadata 必须有用于分组的列（ident / group / cluster）
-```
+### 2.1 FindAllMarkers
 
-### 支持的输入格式
-| 格式 | 处理方式 |
-|------|---------|
-| Seurat 对象 (.rds) | 直接 `FindMarkers()` |
-| 归一化矩阵 + meta.data | 构建 Seurat 对象 |
-| AnnData (.h5ad) | anndata + Seurat 转换 |
-| SingleCellExperiment | as.Seurat() 转换 |
+找所有 identity class 的 marker 基因。
 
-### ⚠️ 重要注意事项
-- **输入数据必须是 log1p 归一化后的数据**，不是原始 count
-- `FindMarkers` 默认使用 `ident` 列作为分组，可通过 `group.by` 指定其他列
-- 对于 cluster marker，建议用 `only.pos = TRUE` 筛选上调基因
-- **pseudobulk 方法**（聚合后用 DESeq2/edgeR）比 single-cell 方法更稳定，适合细胞数较少的情况
-
----
-
-## 3. 标准分析流程
-
-### Step 1: 数据准备
 ```r
-library(Seurat)
-library(dplyr)
-
-# 加载数据
-seu <- readRDS("input.rds")
-
-# 查看分组信息
-table(seu$seurat_clusters)  # cluster 分组
-table(seu$group)            # 条件分组（如果有用 group）
-
-# 设置要比较的组别
-Idents(seu) <- "seurat_clusters"  # 或 "group"
-```
-
-### Step 2: 两组比较（Cluster Marker / Condition vs Control）
-
-#### 方法 1: Wilcoxon Rank Sum Test（默认，最常用）
-```r
-# Cluster 1 vs 所有其他 Cluster
-deg <- FindMarkers(
-    seu,
-    ident.1 = "1",                    # 要比较的组
-    ident.2 = NULL,                   # NULL = 与所有其他组比较
-    test.use = "wilcox",              # 默认
-    min.pct = 0.1,                    # 基因在两组中至少 10% 的细胞表达
-    logfc.threshold = 0.25,           # log fold change 阈值
-    only.pos = FALSE,                 # 是否只保留上调基因
-    densify = FALSE                   # 对于大型数据用 TRUE
+FindAllMarkers(
+  object,
+  assay = NULL,
+  features = NULL,
+  group.by = NULL,
+  logfc.threshold = 0.1,
+  test.use = "wilcox",
+  slot = "data",
+  min.pct = 0.01,
+  min.diff.pct = -Inf,
+  node = NULL,
+  verbose = TRUE,
+  only.pos = FALSE,
+  max.cells.per.ident = Inf,
+  random.seed = 1,
+  latent.vars = NULL,
+  min.cells.feature = 3,
+  min.cells.group = 3,
+  mean.fxn = NULL,
+  fc.name = NULL,
+  base = 2,
+  return.thresh = 0.01,
+  densify = FALSE
 )
 ```
 
-#### 方法 2: MAST（考虑表达率，更严格）
-```r
-# 需要额外安装：BiocManager::install("MAST")
-deg <- FindMarkers(
-    seu,
-    ident.1 = "1",
-    ident.2 = "0",
-    test.use = "mast",
-    min.pct = 0.1,
-    logfc.threshold = 0
-)
-```
-
-#### 方法 3: presto（快，适合大规模）
-```r
-# 需要安装：remotes::install_github("immunogenomics/presto")
-deg <- FindMarkers(
-    seu,
-    ident.1 = "1",
-    ident.2 = "0",
-    test.use = "presto",
-    only.pos = FALSE
-)
-```
-
-### Step 3: 多组比较（ANOVA-style）
-```r
-# 多个 cluster 的差异分析（逐一比较）
-clusters <- unique(seu$seurat_clusters)
-all_deg <- list()
-
-for (i in clusters) {
-    for (j in clusters) {
-        if (i < j) {
-            deg <- FindMarkers(seu, ident.1 = i, ident.2 = j)
-            deg$cluster1 <- i
-            deg$cluster2 <- j
-            deg$gene <- rownames(deg)
-            all_deg <- rbind(all_deg, deg)
-        }
-    }
-}
-```
-
-### Step 4: 结果筛选与可视化
-```r
-# 筛选显著差异基因
-sig_deg <- deg[deg$p_val_adj < 0.05 & abs(deg$avg_log2FC) > 0.5, ]
-sig_deg <- sig_deg[order(sig_deg$avg_log2FC, decreasing = TRUE), ]
-
-# 热图
-top_genes <- head(rownames(sig_deg), 20)
-DoHeatmap(seu, features = top_genes, group.by = "seurat_clusters")
-
-# 小提琴图
-VlnPlot(seu, features = c("GeneA", "GeneB"), split.by = "group")
-
-# 散点图（FeaturePlot）
-FeaturePlot(seu, features = c("GeneA", "GeneB"), reduction = "umap")
-```
-
----
-
-## 4. 参数详解
-
-### FindMarkers 核心参数
+**参数说明：**
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
-| `ident.1` | 必填 | 比较组 1（字符串或数字） |
-| `ident.2` | NULL | 比较组 2，NULL = 与所有其他组比较 |
-| `test.use` | "wilcox" | 统计方法：wilcox / mast / t / negbinom / poisson /DESeq2 / presto |
-| `min.pct` | 0.1 | 基因在两组中表达的细胞比例阈值 |
-| `logfc.threshold` | 0.25 | logFC 阈值 |
-| `only.pos` | FALSE | 是否只保留上调基因 |
-| `return.thresh` | 0.05 | p_val_adj 阈值 |
-| `base` | 2 | logFC 计算的底数 |
+| `object` | 必需 | Seurat 对象 |
+| `group.by` | NULL | 分组列名（默认用 ident） |
+| `logfc.threshold` | 0.1 | log fold change 阈值 |
+| `test.use` | "wilcox" | 统计检验方法 |
+| `slot` | "data" | 数据槽：data / counts / scale.data |
+| `min.pct` | 0.01 | 基因在两组中表达的最小比例 |
+| `min.diff.pct` | -Inf | 两组检测率最小差异 |
+| `only.pos` | FALSE | 只返回上调基因 |
+| `max.cells.per.ident` | Inf | 每个 identity 类的最大细胞数（下采样） |
+| `return.thresh` | 0.01 | p 值阈值 |
 
-### 各方法适用场景
+**test.use 选项：**
 
-| 方法 | 适用场景 | 优缺点 |
-|------|---------|--------|
-| Wilcoxon | 常规 marker 检测 | 快，不假设分布 |
-| MAST | 需要考虑表达率 | 慢，更严格 |
-| t-test | 大样本 | 简单，快 |
-| presto | 大数据集 | 极快，结果准 |
-| DESeq2/edgeR | Pseudobulk / Bulk | 需要聚合 |
+| 方法 | 说明 |
+|------|------|
+| `"wilcox"` | Wilcoxon Rank Sum test（默认，最常用） |
+| `"wilcox_limma"` | limma 实现的 Wilcoxon |
+| `"bimod"` | Likelihood-ratio test |
+| `"roc"` | ROC 分析，返回 AUC |
+| `"t"` | Student's t-test |
+| `"negbinom"` | 负二项分布（UMI 数据） |
+| `"poisson"` | Poisson 分布 |
+| `"LR"` | Logistic Regression |
+| `"MAST"` | Hurdle model（考虑表达率） |
+| `"DESeq2"` | DESeq2（需安装） |
+
+**示例：**
+
+```r
+# 找所有 cluster 的 marker
+all_markers <- FindAllMarkers(
+  seu,
+  only.pos = TRUE,
+  min.pct = 0.1,
+  logfc.threshold = 0.25
+)
+
+# 筛选显著基因
+sig_markers <- all_markers[all_markers$p_val_adj < 0.05, ]
+
+# Top 10 marker per cluster
+top10 <- sig_markers %>%
+  group_by(cluster) %>%
+  top_n(n = 10, wt = avg_log2FC)
+```
 
 ---
 
-## 5. 输出文件规范
+### 2.2 FindMarkers
+
+比较两个 group 的差异基因。
+
+```r
+FindMarkers(
+  object,
+  ident.1 = NULL,
+  ident.2 = NULL,
+  latent.vars = NULL,
+  group.by = NULL,
+  subset.ident = NULL,
+  assay = NULL,
+  reduction = NULL,
+  ...
+)
+```
+
+**参数说明：**
+
+| 参数 | 说明 |
+|------|------|
+| `ident.1` | 比较组 1 |
+| `ident.2` | 比较组 2（NULL = 与其他所有组比较） |
+| `group.by` | 分组列 |
+| `subset.ident` | 筛选特定 identity |
+
+**示例：**
+
+```r
+# Cluster 1 vs Cluster 2
+deg <- FindMarkers(
+  seu,
+  ident.1 = "1",
+  ident.2 = "0",
+  test.use = "wilcox",
+  min.pct = 0.1,
+  logfc.threshold = 0.25
+)
+
+# 使用 MAST（更严格）
+deg_mast <- FindMarkers(
+  seu,
+  ident.1 = "1",
+  ident.2 = "0",
+  test.use = "MAST",
+  min.pct = 0.1
+)
+
+# 使用 ROC（找 marker）
+deg_roc <- FindMarkers(
+  seu,
+  ident.1 = "1",
+  ident.2 = "0",
+  test.use = "roc"
+)
+```
+
+---
+
+## 3. Part B: Python — Scanpy
+
+### 3.1 rank_genes_groups
+
+```python
+sc.tl.rank_genes_groups(
+    adata,
+    groupby,
+    mask_var=None,
+    use_raw=None,
+    groups='all',
+    reference='rest',
+    n_genes=None,
+    rankby_abs=False,
+    pts=False,
+    key_added=None,
+    copy=False,
+    method=None,
+    corr_method='benjamini-hochberg',
+    tie_correct=False,
+    layer=None,
+    **kwds
+)
+```
+
+**参数说明：**
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `adata` | AnnData | 必需 |
+| `groupby` | str | 分组列名（obs 中的列） |
+| `groups` | str/list | 要比较的组，'all' 或 ['g1', 'g2'] |
+| `reference` | str | 参考组，'rest' 或特定组名 |
+| `n_genes` | int | 返回的基因数，默认全部 |
+| `rankby_abs` | bool | 按绝对值排序 |
+| `pts` | bool | 计算表达比例 |
+| `method` | str | 统计方法 |
+| `corr_method` | str | p 值校正方法 |
+
+**method 选项：**
+
+| 方法 | 说明 |
+|------|------|
+| `"logreg"` | Logistic Regression |
+| `"t-test"` | t-test |
+| `"wilcoxon"` | Wilcoxon rank-sum test |
+| `"t-test_overestim_var"` | t-test（过度估计方差） |
+
+**corr_method 选项：**
+
+| 方法 | 说明 |
+|------|------|
+| `"benjamini-hochberg"` | FDR 校正（默认） |
+| `"bonferroni"` | Bonferroni 校正 |
+
+**示例：**
+
+```python
+import scanpy as sc
+
+# 加载数据
+adata = sc.read_h5ad('input.h5ad')
+
+# 找所有 cluster 的 marker
+sc.tl.rank_genes_groups(
+    adata, 
+    groupby='leiden',
+    method='wilcoxon',
+    corr_method='benjamini-hochberg'
+)
+
+# 查看结果
+adata.uns['rank_genes_groups']['names'].dtype()
+
+# 提取结果为 DataFrame
+result = sc.get.rank_genes_groups_df(adata, group='1')
+result.to_csv('result_cluster1_markers.csv', index=False)
+```
+
+**获取结果：**
+
+```python
+# 获取某个 group 的 marker
+markers = sc.get.rank_genes_groups_df(adata, group='1')
+print(markers.head(20))
+
+# 获取所有 group 的 marker
+for group in adata.obs[groupby].unique():
+    markers = sc.get.rank_genes_groups_df(adata, group=group)
+    markers.to_csv(f'result_{group}_markers.csv', index=False)
+```
+
+**可视化：**
+
+```python
+# 热图
+sc.pl.rank_genes_groups_heatmap(adata, n_genes=10)
+
+# Dotplot
+sc.pl.rank_genes_groups_dotplot(adata, n_genes=10)
+
+# 堆叠 violin
+sc.pl.rank_genes_groups_stacked_violin(adata, n_genes=10)
+```
+
+---
+
+## 4. 输出文件规范
 
 **⚠️ 所有输出文件名必须以 `result_` 开头！**
 
+### R 输出
 ```r
-# CSV：完整 DEG 结果
-write.csv(deg, "result_deg_full.csv", row.names = TRUE)
+# 所有 marker
+write.csv(all_markers, "result_all_markers.csv", row.names = FALSE)
 
-# CSV：显著 DEG（筛选后）
-write.csv(sig_deg, "result_deg_significant.csv")
+# 显著 marker（padj < 0.05, |log2FC| > 0.5）
+sig_markers <- all_markers[all_markers$p_val_adj < 0.05 & abs(all_markers$avg_log2FC) > 0.5, ]
+write.csv(sig_markers, "result_significant_markers.csv")
 
-# CSV：Top DEG（每个方向 top N）
-top_up <- head(sig_deg[sig_deg$avg_log2FC > 0, ], 50)
-top_down <- head(sig_deg[sig_deg$avg_log2FC < 0, ], 50)
-write.csv(rbind(top_up, top_down), "result_deg_top50.csv")
+# Top 10 per cluster
+top10 <- sig_markers %>% group_by(cluster) %>% top_n(10, wt = avg_log2FC)
+write.csv(top10, "result_top10_per_cluster.csv")
+```
 
-# RDS：完整 Seurat 对象（带 DEG 结果）
-deg$gene <- rownames(deg)
-seu@misc$deg_results <- deg
-saveRDS(seu, "result_deg_seurat_object.rds")
+### Python 输出
+```python
+# 所有结果
+sc.get.rank_genes_groups_df(adata).to_csv('result_all_markers.csv', index=False)
+
+# 显著 marker
+sig = adata.uns['rank_genes_groups']
+# 筛选...
+
+# 可视化
+sc.pl.rank_genes_groups_heatmap(adata, n_genes=10, save='result_heatmap.png')
+sc.pl.rank_genes_groups_dotplot(adata, n_genes=10, save='result_dotplot.png')
 ```
 
 ---
 
-## 6. 常见问题
+## 5. 示例命令
 
-### Q1: 没有差异基因
-**原因**: 
-- `min.pct` 或 `logfc.threshold` 太高
-- 两组之间确实没有显著差异
-- 数据质量差
-
-**解决**: 
-```r
-# 降低阈值
-FindMarkers(seu, ident.1 = "1", ident.2 = "0", 
-            min.pct = 0.05, logfc.threshold = 0.1)
 ```
+# R - FindAllMarkers
+帮我找所有cluster的marker基因
 
-### Q2: 某 cluster 的 marker 很少
-**原因**: 该 cluster 与其他 cluster 差异不明显
+# R - FindMarkers
+比较cluster 1和cluster 2的差异基因
 
-**解决**: 
-- 用 `only.pos = FALSE` 查看双向差异
-- 检查 cluster 注释是否正确
-- 考虑增加 resolution
+# Python - rank_genes_groups
+用scanpy找每个cluster的marker
 
-### Q3: p_val_adj 很高
-**原因**: 多重检验校正（Benjamini-Hochberg）
-
-**解决**: 
-- 关注 `avg_log2FC` 而不只是 p 值
-- 差异基因数量和生物学意义更重要
-
----
-
-## 7. Pseudobulk 方法（高级）
-
-当单细胞方法不稳定时（细胞数少），用 pseudobulk：
-
-```r
-# 1. 聚合每个 cluster 的平均表达
-expr <- AverageExpression(seu, group.by = "seurat_clusters")
-expr_matrix <- expr$RNA
-
-# 2. 用 DESeq2 / edgeR 做差异分析
-library(DESeq2)
-coldata <- data.frame(condition = c("ClusterA", "ClusterB", "ClusterC"))
-dds <- DESeqDataSetFromMatrix(expr_matrix, coldata, design = ~condition)
-dds <- DESeq(dds)
-results <- results(dds)
+# Python - 指定方法
+用wilcoxon方法跑差异分析
 ```
 
 ---
 
-## 8. 参考资料
+## 6. 参考资料
 
-- Seurat FindMarkers: https://satijalab.org/seurat/articles/find_markers
-- MAST paper: https://www.nature.com/articles/nmeth.3969
-- Pseudobulk 最佳实践: https://www.nature.com/articles/s41596-021-00546-x
+- **Seurat FindAllMarkers**: https://satijalab.org/seurat/reference/findallmarkers
+- **Seurat FindMarkers**: https://satijalab.org/seurat/reference/findmarkers
+- **Scanpy rank_genes_groups**: https://scanpy.readthedocs.io/en/stable/generated/scanpy.tl.rank_genes_groups.html
+- **MAST**: https://www.nature.com/articles/nmeth.3969
