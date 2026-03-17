@@ -8,7 +8,7 @@ Environment variables (or .env file):
     OMICSCLAW_DATA  — Data directory (default: ./data)
 
 Run:
-    python -m omicsclaw.gateway
+    python -m cellclaw.gateway
     # or
     python gateway.py
 """
@@ -33,7 +33,7 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
-logger = logging.getLogger("omicsclaw.gateway")
+logger = logging.getLogger("cellclaw.gateway")
 
 # ── Import Agent ───────────────────────────────────────────────────────────
 import sys
@@ -77,7 +77,7 @@ class CellClawBot(discord.Client):
             kwargs["proxy"] = proxy
         super().__init__(**kwargs)
         self.agent = CellClawAgent(workspace_dir=DATA_DIR)
-        self._download_dir = Path(tempfile.mkdtemp(prefix="omicsclaw_attachments_"))
+        self._download_dir = Path(tempfile.mkdtemp(prefix="cellclaw_attachments_"))
         self._dm_pending_users: set[str] = set()
         # Create command tree manually
         self.tree = app_commands.CommandTree(self)
