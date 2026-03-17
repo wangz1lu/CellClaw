@@ -127,11 +127,6 @@ class CellClawBot(discord.Client):
             await interaction.response.send_message(result.text if result else "Error", ephemeral=True)
         
         self.tree.add_command(env_group)
-            result = await self.agent._dispatcher.dispatch(cmd, str(interaction.user.id), is_dm=False)
-            if result:
-                await interaction.response.send_message(result.text, ephemeral=True)
-            else:
-                await interaction.response.send_message("Use /env list/use/scan", ephemeral=True)
 
         @self.tree.command(name="job", description="Job management")
         @app_commands.choices(action=[
