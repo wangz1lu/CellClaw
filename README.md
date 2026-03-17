@@ -1,4 +1,4 @@
-# CellClaw 🧬
+# CellClaw 
 
 > **AI Bioinformatics Engineer on Discord — Remote HPC control via natural language**
 
