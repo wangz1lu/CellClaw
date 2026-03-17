@@ -7,6 +7,7 @@
 
 
 CellClaw is a personal AI assistant that puts the power of remote high-performance computing directly into your hands. It bridges the gap between complex infrastructure and natural language, allowing you to control Linux servers, HPC clusters, and workstations from the platforms where you already collaborate.
+
 It allows you to orchestrate deep biological insights—running scRNA-seq pipelines, CellChat, DEG analysis, and complex Visualizations—across the channels you already use:
 ```
 Discord (Primary Hub — Active)
