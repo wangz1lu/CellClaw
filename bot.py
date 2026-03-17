@@ -127,6 +127,32 @@ class CellClawBot(discord.Client):
             await interaction.response.send_message(result.text if result else "Error", ephemeral=True)
         
         self.tree.add_command(env_group)
+        
+        # /project subcommand group
+        project_group = app_commands.Group(name="project", description="Project management")
+        
+        @project_group.command(name="set", description="Set working directory")
+        @app_commands.describe(path="Directory path")
+        async def project_set(interaction: discord.Interaction, path: str):
+            cmd = f"/project set {path}"
+            result = await self.agent._dispatcher.dispatch(cmd, str(interaction.user.id), is_dm=False)
+            await interaction.response.send_message(result.text if result else "Error", ephemeral=True)
+        
+        @project_group.command(name="ls", description="List project files")
+        @app_commands.describe(path="Directory path (optional)")
+        async def project_ls(interaction: discord.Interaction, path: str = None):
+            cmd = f"/project ls {path or ''}"
+            result = await self.agent._dispatcher.dispatch(cmd, str(interaction.user.id), is_dm=False)
+            await interaction.response.send_message(result.text if result else "Error", ephemeral=True)
+        
+        @project_group.command(name="info", description="Show file info")
+        @app_commands.describe(file="File path")
+        async def project_info(interaction: discord.Interaction, file: str):
+            cmd = f"/project info {file}"
+            result = await self.agent._dispatcher.dispatch(cmd, str(interaction.user.id), is_dm=False)
+            await interaction.response.send_message(result.text if result else "Error", ephemeral=True)
+        
+        self.tree.add_command(project_group)
 
         # /help command
         @self.tree.command(name="help", description="Show all available commands")
