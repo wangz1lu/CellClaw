@@ -158,28 +158,38 @@ class CellClawBot(discord.Client):
             help_text = """
 **CellClaw Commands**
 
-**Server Management:**
-- `/server list` - List all servers
-- `/server add` - Add new server
-- `/server use <name>` - Switch server
-- `/server test` - Test server connection
+**Server Management**
+/server add --name <id> --host <IP> --user <user> --port <port> [--key <path>] [--password true]
+/server list
+/server use <name>
+/server test [name]
+/server info [name]
+/server remove <name>
 
-**Environment Management:**
-- `/env list` - List all environments
-- `/env use <name>` - Switch environment
-- `/env scan <name>` - Scan environment
+**Project**
+/project set <path>
+/project ls [path]
+/project info <file.h5ad>
 
-**Job Management:**
-- `/job list` - List all jobs
-- `/job set` - Submit background job
-- `/job status <id>` - Check job status
-- `/job log <id>` - View job log
-- `/job cancel <id>` - Cancel job
+**Job Management**
+/job list
+/job set <description> — Submit background job
+/job status <job_id>
+/job log <job_id>
+/job cancel <job_id>
 
-**Other:**
-- `/skill list` - List all skills
-- `/skill info <name>` - View skill details
-- `/help` - Show this help
+**Skills**
+/skill list — List all installed skills
+/skill use <skill_id> <task> — Force activate skill
+
+**Memory**
+/memory show — View long-term memory
+/memory today — View today's logs
+/memory clear — Clear chat history
+/memory note <content> — Write to memory
+
+**Session**
+/status
 """
             await interaction.response.send_message(help_text, ephemeral=True)
 
