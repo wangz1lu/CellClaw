@@ -3,8 +3,8 @@
 # 使用 PID 文件防止多开
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PID_FILE="/tmp/omicsclaw_bot.pid"
-LOG_FILE="/tmp/omicsclaw_bot.log"
+PID_FILE="/tmp/cellclaw_bot.pid"
+LOG_FILE="/tmp/cellclaw_bot.log"
 VENV_DIR="$SCRIPT_DIR/venv"
 
 # 检查是否已在运行
