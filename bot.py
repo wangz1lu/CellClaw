@@ -200,21 +200,24 @@ class CellClawBot(discord.Client):
             else:
                 await interaction.response.send_message("Use /job list/set/status/log/cancel", ephemeral=True)
 
-        @self.tree.command(name="skill", description="Skill management")
-        @app_commands.choices(action=[
-            app_commands.Choice(name="list - List all skills", value="list"),
-            app_commands.Choice(name="info - Show skill details", value="info"),
-            app_commands.Choice(name="use - Use a skill", value="use"),
-            app_commands.Choice(name="run - Run a skill", value="run"),
-        ])
-        async def skill_slash(interaction: discord.Interaction, action: app_commands.Choice[str] = None):
-            action = action.value if action else "list"
-            cmd = f"/skill {action}"
+        # /skill subcommand group
+        skill_group = app_commands.Group(name="skill", description="Skill management")
+        
+        @skill_group.command(name="list", description="List all skills")
+        async def skill_list(interaction: discord.Interaction):
+            cmd = "/skill list"
             result = await self.agent._dispatcher.dispatch(cmd, str(interaction.user.id), is_dm=False)
-            if result:
-                await interaction.response.send_message(result.text, ephemeral=True)
-            else:
-                await interaction.response.send_message("Use /skill list/info/use/run", ephemeral=True)
+            await interaction.response.send_message(result.text if result else "Error", ephemeral=True)
+        
+        @skill_group.command(name="use", description="Force activate a skill")
+        async def skill_use(interaction: discord.Interaction, skill_id: str, task: str = None):
+            cmd = f"/skill use {skill_id}"
+            if task:
+                cmd += f" {task}"
+            result = await self.agent._dispatcher.dispatch(cmd, str(interaction.user.id), is_dm=False)
+            await interaction.response.send_message(result.text if result else "Error", ephemeral=True)
+        
+        self.tree.add_command(skill_group)
 
         @self.tree.command(name="memory", description="Memory management")
         @app_commands.choices(action=[
