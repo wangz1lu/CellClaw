@@ -141,19 +141,14 @@ class CommandDispatcher:
                 if scripts:
                     lines.append(f"  模板脚本: `{'`, `'.join(scripts)}`")
                 lines.append("")
-            lines.append("─────────────────")
-            lines.append("📌 **使用方式：**")
-            lines.append("`/skill info <id>` — 查看完整知识库")
-            lines.append("`/skill use <id> <你的需求>` — 直接让 Agent 用此 Skill 分析")
-            lines.append('**自然语言触发**：直接说"帮我跑细胞通讯"也会自动激活对应 Skill')
             return CommandResult.info("\n".join(lines))
 
         elif action == "info":
+            # Redirect to use with info flag
             if not skill_id:
-                return CommandResult.err(
-                    "请指定 Skill ID：`/skill info <id>`\n"
-                    "Use `/skill list` to see all available Skills and their IDs"
-                )
+                return CommandResult.err("Please specify a skill ID. Use `/skill list` to see all skills.")
+            cmd = ParsedCommand(group="skill", action="use", args=[skill_id], flags={}, raw=f"/skill use {skill_id}")
+            return await self._handle_skill_cmd(cmd, discord_user_id)
             skill = loader.get(skill_id)
             if not skill:
                 available = ", ".join(f"`{s}`" for s in loader.skill_ids())
@@ -196,8 +191,8 @@ class CommandDispatcher:
             return CommandResult.info(
                 "**Skill 命令：**\n"
                 "`/skill list` — 列出所有已安装的分析 Skill（含 ID）\n"
-                "`/skill info <id>` — 查看某个 Skill 的详细知识库\n"
-                "`/skill use <id> <需求>` — 强制激活 Skill 并让 Agent 执行\n\n"
+                "`/skill info <id>` — View skill details\n"
+                "`/skill use <id> <需求>` — Force activate skill 并让 Agent 执行\n\n"
                 '💡 **自然语言也可以自动触发 Skill**，说"帮我跑细胞通讯"none需显式命令'
             )
 
@@ -289,8 +284,8 @@ class CommandDispatcher:
             "```\n"
             "**Skills**\n"
             "```\n"
-            "/skill list                     — List all skills\n"
-            "/skill use  <skill_id> [task]   — Force activate skill\n"
+            "/skill list              — List all skills\n"
+            "/skill use <skill_id>    — View or activate skill\n"
             "```\n"
             "**Memory**\n"
             "```\n"
