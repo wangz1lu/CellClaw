@@ -128,6 +128,36 @@ class CellClawBot(discord.Client):
         
         self.tree.add_command(env_group)
 
+        # /help command
+        @self.tree.command(name="help", description="Show all available commands")
+        async def help_slash(interaction: discord.Interaction):
+            help_text = """
+**CellClaw 命令帮助**
+
+**服务器管理:**
+- `/server list` - 列出所有服务器
+- `/server add` - 添加新服务器
+- `/server use <name>` - 切换服务器
+- `/server test` - 测试服务器连接
+
+**环境管理:**
+- `/env list` - 列出所有环境
+- `/env use <name>` - 切换环境
+- `/env scan <name>` - 扫描环境
+
+**任务管理:**
+- `/job list` - 列出所有任务
+- `/job set` - 提交后台任务
+- `/job status <id>` - 查看任务状态
+- `/job log <id>` - 查看任务日志
+- `/job cancel <id>` - 取消任务
+
+**其他:**
+- `/skill list` - 列出所有技能
+- `/skill info <name>` - 查看技能详情
+"""
+            await interaction.response.send_message(help_text, ephemeral=True)
+
         @self.tree.command(name="job", description="Job management")
         @app_commands.choices(action=[
             app_commands.Choice(name="list - List all jobs", value="list"),
