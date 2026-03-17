@@ -351,7 +351,14 @@
     
     async function loadSkills() {
         console.log('Loading skills...');
-        const skills = await apiGet('/skills');
+        // Load from static JSON file (simpler than API)
+        let skills = [];
+        try {
+            const resp = await fetch('/skills.json');
+            skills = await resp.json();
+        } catch(e) {
+            console.error('Failed to load skills:', e);
+        }
         console.log('Skills:', skills);
         if (!skills || !Array.isArray(skills) || !skills.length) {
             document.getElementById('skillsList').innerHTML = '<div style="color:#555;text-align:center;padding:20px;">No skills</div>';

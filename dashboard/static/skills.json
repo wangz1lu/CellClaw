@@ -1,0 +1,34 @@
+[
+  {
+    "id": "annotation_sctype",
+    "name": "annotation_sctype"
+  },
+  {
+    "id": "visualization_R",
+    "name": "visualization_R"
+  },
+  {
+    "id": "_template",
+    "name": "_template"
+  },
+  {
+    "id": "deg_analysis",
+    "name": "deg_analysis"
+  },
+  {
+    "id": "scRNA_seurat",
+    "name": "scRNA-seq-Seurat Skill"
+  },
+  {
+    "id": "batch_harmony",
+    "name": "batch_harmony"
+  },
+  {
+    "id": "ccc_cellchat",
+    "name": "ccc_cellchat"
+  },
+  {
+    "id": "snRNA_scanpy",
+    "name": "snRNA_scanpy Skill"
+  }
+]
