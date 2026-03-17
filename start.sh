@@ -127,6 +127,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 print(f'🧬 Dashboard: http://127.0.0.1:{PORT}')
 with socketserver.TCPServer(('', PORT), Handler) as httpd:
     httpd.serve_forever()
-" > /tmp/omicsclaw_dashboard.log 2>&1 &
+" > /tmp/cellclaw_dashboard.log 2>&1 &
 
 echo "✅ Dashboard 已启动 (http://127.0.0.1:7860)"
