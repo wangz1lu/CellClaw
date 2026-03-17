@@ -282,10 +282,21 @@
         document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
         document.getElementById(id).classList.add('active');
         el.classList.add('active');
+        // Load data when switching pages
+        if (id === 'jobs') loadJobs();
+        if (id === 'servers') loadServers();
+        if (id === 'skills') loadSkills();
     }
     
     async function apiGet(url) {
-        try { return await fetch(API + url).then(r => r.json()); } catch { return {}; }
+        try { 
+            const result = await fetch(API + url).then(r => r.json());
+            console.log('API:', url, '=>', result);
+            return result;
+        } catch(e) { 
+            console.error('API error:', url, e);
+            return {}; 
+        }
     }
     
     async function updateStatus() {
