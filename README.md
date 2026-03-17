@@ -143,10 +143,12 @@ Built-in skills:
 |-------|-------------|
 | `ccc_cellchat` | CellChat cell-cell communication |
 | `deg_analysis` | Differential gene expression |
-| `gsea_enrichment` | GO/KEGG enrichment |
-| `dimreduc_standard` | Standard clustering (PCA/UMAP) |
+| `scRNA_seurat` | Standard Seurat(scRNA-seq) workflow |
+| `snRNA_scanpy` | Standard scanpy(scRNA-seq) workflow |
 | `annotation_sctype` | Cell type annotation |
-| `batch_harmony` | Batch correction with Harmony |
+| `batch_harmony` | Batch correction |
+| `visualization_R` | Visualization in R |
+
 
 ---
 
