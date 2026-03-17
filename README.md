@@ -197,25 +197,25 @@ bash install.sh  # Reinstall dependencies
 ## Discord Quick setup
 You will need to create a new application with a bot, add the bot to your server, and pair it to CellClaw. We recommend adding your bot to your own private server. If you don’t have one yet, create one first ([choose Create My Own > For me and my friends)(https://discord.com/developers/applications)].
 
-###1.Create a Discord application and bot
+### 1.Create a Discord application and bot
 
 Go to the Discord Developer Portal and click New Application. Name it something like “CellClaw”.
 Click Bot on the sidebar. Set the Username to whatever you call your OpenClaw agent.
 
-###2.Enable privileged intents
+### 2.Enable privileged intents
 
 Still on the Bot page, scroll down to Privileged Gateway Intents and enable:
 Message Content Intent (required)
 Server Members Intent (recommended; required for role allowlists and name-to-ID matching)
 Presence Intent (optional; only needed for presence updates)
 
-###3.Copy your bot token
+### 3.Copy your bot token
 
 Scroll back up on the Bot page and click Reset Token.
 Despite the name, this generates your first token — nothing is being “reset.”
 Copy the token and save it somewhere. This is your Bot Token and you will need it shortly.
 
-###4.Generate an invite URL and add the bot to your server
+### 4.Generate an invite URL and add the bot to your server
 
 Click OAuth2 on the sidebar. You’ll generate an invite URL with the right permissions to add the bot to your server.
 Scroll down to OAuth2 URL Generator and enable:
