@@ -927,6 +927,11 @@ class CellClawAgent:
                         conda_env=conda_env,
                         workdir=workdir,
                     )
+                    # Start polling for the new job (only if we have a channel to notify)
+                    if channel_id:
+                        self._start_polling(job.job_id, discord_user_id, channel_id, interval=30)
+                    else:
+                        logger.warning(f"submit_job: no channel_id, skipping polling for job {job.job_id}")
                     tool_log.append(f"submit_job: {job.job_id} — {description}")
                     return (
                         f"✅ 任务已提交后台运行\n"
@@ -934,7 +939,8 @@ class CellClawAgent:
                         f"描述: {description}\n"
                         f"日志: `{job.log_path}`\n"
                         f"查看进度: `/job status {job.job_id}`\n"
-                        f"查看日志: `/job log {job.job_id}`"
+                        f"查看日志: `/job log {job.job_id}`\n"
+                        f"⏳ 任务完成后我会通知你"
                     )
                 except Exception as e:
                     return f"❌ 任务提交失败: {e}"
