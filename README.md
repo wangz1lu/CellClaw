@@ -244,7 +244,18 @@ Add Reactions (optional)
 ```
 Copy the generated URL at the bottom, paste it into your browser, select your server, and click Continue to connect. You should now see your bot in the Discord server.
 
+---
+## Citation
 
+If you use CellClaw in your research, please cite:
+```
+@software{cellclaw2026,
+  title = {CellClaw: Natural Language Automation for Remote Bioinformatics Workflows on High-Performance Computing Clusters},
+  author = {Zilu Wang}, 
+  year = {2026},
+  url = {https://github.com/wangz1lu/CellClaw}
+}
+```
 ---
 
 License: MIT
