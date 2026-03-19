@@ -4,6 +4,12 @@ import http.server
 import socketserver
 import json
 import urllib.request
+import os
+
+# Clear proxy for localhost connections
+for var in ['http_proxy', 'https_proxy', 'HTTP_PROXY', 'HTTPS_PROXY']:
+    os.environ.pop(var, None)
+os.environ['no_proxy'] = 'localhost,127.0.0.1'
 
 PORT = 7860
 API_PORT = 19766
