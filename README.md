@@ -1,6 +1,6 @@
-> **AI Bioinformatics Engineer on Discord — Remote HPC control via natural language**
 
 <img width="1136" height="309" alt="cellclaw2" src="https://github.com/user-attachments/assets/3f4935b2-8030-4960-a302-4c3bee156e61" />
+> **AI Bioinformatics Engineer on Discord — Remote HPC control via natural language**
 
 <img width="828" height="1060" alt="image" src="https://github.com/user-attachments/assets/31944240-426e-4cfd-9810-44af7d80355e" /># 🧬 CellClaw - Personal HPC AI Agent
 
