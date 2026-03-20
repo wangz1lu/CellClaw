@@ -513,14 +513,11 @@ class CellClawAgent:
                 continue
 
             if job.status == JobStatus.DONE:
-                # Download results and notify
-                local_files = await self._ssh.collect_job_results(
-                    job_id, discord_user_id
-                )
-                # Store result files in job for /job status to show
-                job.result_files = local_files
+                # Get result files from job
+                result_files = getattr(job, 'result_files', []) or []
+                success_summary = getattr(job, 'success_summary', None) or "任务完成"
                 await self._notify_done(
-                    job_id, discord_user_id, channel_id, local_files, job.log_path
+                    job_id, discord_user_id, channel_id, success_summary, job.log_path, result_files
                 )
                 return
 
