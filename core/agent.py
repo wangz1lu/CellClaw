@@ -513,12 +513,20 @@ class CellClawAgent:
                 continue
 
             if job.status == JobStatus.DONE:
-                # Get result files from job
-                result_files = getattr(job, 'result_files', []) or []
-                success_summary = getattr(job, 'success_summary', None) or "任务完成"
-                await self._notify_done(
-                    job_id, discord_user_id, channel_id, success_summary, job.log_path, result_files
-                )
+                try:
+                    # Get result files from job
+                    result_files = getattr(job, 'result_files', []) or []
+                    success_summary = getattr(job, 'success_summary', None) or "任务完成"
+                    await self._notify_done(
+                        job_id, discord_user_id, channel_id, success_summary, job.log_path, result_files
+                    )
+                except Exception as e:
+                    logger.error(f"_notify_done failed for job {job_id}: {e}")
+                    # Still notify with minimal info
+                    try:
+                        await self._notify_done(job_id, discord_user_id, channel_id, "任务完成", job.log_path, [])
+                    except:
+                        pass
                 return
 
             elif job.status == JobStatus.FAILED:
