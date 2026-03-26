@@ -57,7 +57,7 @@ CellClaw: 🧬 Reading skill knowledge base for cell-cell communication...
 ### Install
 
 ```bash
-git clone https://github.com/wangz1lu/CellClaw
+git clone -b develop https://github.com/wangz1lu/CellClaw.git
 cd cellclaw
 bash install.sh
 ```
