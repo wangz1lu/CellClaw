@@ -9,6 +9,7 @@ Architecture:
 - Coder: Code generation
 - Reviewer: Code review
 - Executor: Execution monitoring
+- Integration: Connect with existing system
 """
 
 from agents.base import BaseAgent
@@ -23,6 +24,7 @@ from agents.planner import PlannerAgent, IntentResult
 from agents.coder import CoderAgent, CodeResult
 from agents.reviewer import ReviewerAgent, ReviewIssue, ReviewResult
 from agents.executor import ExecutorAgent, JobStatus
+from agents.integration import MultiAgentSystem, IntegrationConfig
 
 __all__ = [
     # Base
@@ -52,6 +54,10 @@ __all__ = [
     "ReviewResult",
     "ExecutorAgent",
     "JobStatus",
+    
+    # Integration
+    "MultiAgentSystem",
+    "IntegrationConfig",
 ]
 
 __version__ = "2.0.0"
