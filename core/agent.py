@@ -513,15 +513,20 @@ class CellClawAgent:
                 continue
 
             if job.status == JobStatus.DONE:
-                # Download results and notify
-                local_files = await self._ssh.collect_job_results(
-                    job_id, discord_user_id
-                )
-                # Store result files in job for /job status to show
-                job.result_files = local_files
-                await self._notify_done(
-                    job_id, discord_user_id, channel_id, local_files, job.log_path
-                )
+                try:
+                    # Get result files from job
+                    result_files = getattr(job, 'result_files', []) or []
+                    success_summary = getattr(job, 'success_summary', None) or "任务完成"
+                    await self._notify_done(
+                        job_id, discord_user_id, channel_id, success_summary, job.log_path, result_files
+                    )
+                except Exception as e:
+                    logger.error(f"_notify_done failed for job {job_id}: {e}")
+                    # Still notify with minimal info
+                    try:
+                        await self._notify_done(job_id, discord_user_id, channel_id, "任务完成", job.log_path, [])
+                    except:
+                        pass
                 return
 
             elif job.status == JobStatus.FAILED:
@@ -538,54 +543,65 @@ class CellClawAgent:
         job_id: str,
         discord_user_id: str,
         channel_id: str,
-        local_files: list[str],
+        success_summary: str,
         log_path: str,
+        result_files: list[str] = None,
     ):
         """
-        Notify a Discord channel that a job completed.
-        Shows actual file paths and generates summary from job log.
+        Notify a Discord channel that a job completed successfully.
+        Shows result path and file names.
         """
+        import os
         IMAGE_EXTS  = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
         ATTACH_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf", ".svg",
                        ".csv", ".tsv", ".rds", ".h5ad", ".txt"}
+        
+        result_files = result_files or []
+        
+        # 1. Basic success message
+        text = f"✅ **任务 `{job_id}` 成功完成！**\n<@{discord_user_id}>\n\n"
 
-        figures  = [f for f in local_files if Path(f).suffix.lower() in IMAGE_EXTS]
-        attached = [f for f in local_files if Path(f).suffix.lower() in ATTACH_EXTS]
-        extra_attach = [f for f in attached if f not in figures]
-
-        text = f"✅ **任务 `{job_id}` 完成！**\n<@{discord_user_id}>\n\n"
-
-        # Show actual file paths
-        if local_files:
-            text += "📁 **结果文件：**\n"
-            for f in local_files:
-                text += f"  📄 `{f}`\n"
+        # 2. Get result directory
+        if result_files:
+            result_dir = os.path.dirname(result_files[0])
+            text += f"📁 **结果目录：**\n  `{result_dir}`\n\n"
         else:
-            text += "⚠️ 未生成任何结果文件\n"
+            result_dir = os.path.dirname(log_path)
+            text += f"📁 **结果目录：**\n  `{result_dir}`\n\n"
+            text += "⚠️ 未扫描到结果文件\n\n"
 
+        # 3. List result files
+        if result_files:
+            text += "📂 **结果文件：**\n"
+            for f in result_files:
+                fname = os.path.basename(f)
+                fsize = ""
+                try:
+                    size = os.path.getsize(f)
+                    if size > 1024*1024:
+                        fsize = f" ({size//1024//1024}MB)"
+                    elif size > 1024:
+                        fsize = f" ({size//1024}KB)"
+                except:
+                    pass
+                text += f"  📄 {fname}{fsize}\n"
+            text += "\n"
+
+        # 4. Count figures and attachments
+        figures = [f for f in result_files if Path(f).suffix.lower() in IMAGE_EXTS]
+        attachments = [f for f in result_files if Path(f).suffix.lower() in ATTACH_EXTS and f not in figures]
+        
         if figures:
-            text += f"\n📊 图表预览: {len(figures)} 张\n"
-        if extra_attach:
-            text += f"📎 附件: {len(extra_attach)} 个\n"
+            text += f"📊 图表: {len(figures)} 张\n"
+        if attachments:
+            text += f"📎 附件: {len(attachments)} 个\n"
 
-        # Generate summary from job log
-        llm = get_llm_client()
-        if llm.enabled and log_path:
-            try:
-                log_content = await self._ssh.run_shell(
-                    f"tail -100 {log_path}", discord_user_id=discord_user_id
-                )
-                if log_content.stdout:
-                    summary = await llm.summarize_result(log_content.stdout)
-                    if summary and not summary.startswith("[LLM"):
-                        text += f"\n🤖 **任务总结：**\n{summary}"
-            except Exception as e:
-                logger.warning(f"Job summary failed: {e}")
+        # 5. Success summary
+        if success_summary:
+            text += f"\n🤖 **结果总结：**\n{success_summary}\n"
 
-        # Push to notification queue
-        self._pending_notifications[channel_id] = AgentResponse(
-            text=text, figures=figures + extra_attach
-        )
+        # 6. Put in notification queue
+        self._pending_notifications[channel_id] = text
 
     async def _notify_failed(
         self,

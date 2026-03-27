@@ -60,6 +60,18 @@ class EnvCommandHandler:
         name = cmd.first_arg() or cmd.flag("name")
         if not name:
             return CommandResult.err("请指定环境名称。\n用法：`/env use <name>`")
+        
+        # Check if environment exists
+        try:
+            envs = await self._mgr.list_envs(discord_user_id)
+            env_names = [e.get("name", e.get("env_name", "")) if isinstance(e, dict) else getattr(e, 'name', str(e)) for e in envs]
+            if name not in env_names:
+                available = ", ".join(env_names) if env_names else "无"
+                return CommandResult.err(f"❌ 环境 `{name}` 不存在。\n可用环境: {available}")
+        except Exception as e:
+            logger.warning(f"Failed to list envs for validation: {e}")
+        
+        # Environment exists, proceed with switch
         msg = await self._mgr.set_active_env(discord_user_id, name)
         return CommandResult.ok(msg)
 
