@@ -25,6 +25,13 @@ from agents.coder import CoderAgent, CodeResult
 from agents.reviewer import ReviewerAgent, ReviewIssue, ReviewResult
 from agents.executor import ExecutorAgent, JobStatus
 from agents.integration import MultiAgentSystem, IntegrationConfig
+from agents.wrapper import (
+    MultiAgentWrapper,
+    create_multi_agent_wrapper,
+    is_multi_agent_enabled,
+    enable_multi_agent,
+    disable_multi_agent
+)
 
 __all__ = [
     # Base
@@ -58,6 +65,13 @@ __all__ = [
     # Integration
     "MultiAgentSystem",
     "IntegrationConfig",
+    
+    # Wrapper
+    "MultiAgentWrapper",
+    "create_multi_agent_wrapper",
+    "is_multi_agent_enabled",
+    "enable_multi_agent",
+    "disable_multi_agent",
 ]
 
 __version__ = "2.0.0"
