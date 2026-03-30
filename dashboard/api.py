@@ -312,6 +312,18 @@ async def get_stats():
 if __name__ == "__main__":
     import uvicorn
     # WebSocket endpoint for real-time updates
+
+@app.get("/api/ws/status")
+async def ws_status():
+    """Get WebSocket connection status"""
+    from agents.websocket_manager import get_websocket_manager
+    ws_manager = get_websocket_manager()
+    return {
+        "connected": True,
+        "active_connections": len(ws_manager.connections._connections),
+        "tasks_tracked": len(ws_manager._tasks)
+    }
+
     @app.websocket("/ws/{user_id}")
     async def websocket_endpoint(websocket: WebSocket, user_id: str):
         await websocket.accept()

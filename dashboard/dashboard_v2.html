@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CellClaw Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0D0D0D;
+            color: #fff;
+            min-height: 100vh;
+        }
+        
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #1a1a1a 0%, #0d0d0d 100%);
+            border-bottom: 1px solid #333;
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo {
+            font-size: 20px;
+            font-weight: 600;
+            color: #00d4ff;
+        }
+        
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #666;
+        }
+        
+        .status-dot.connected { background: #00ff88; }
+        .status-dot.disconnected { background: #ff4444; }
+        
+        /* Tabs */
+        .tabs {
+            display: flex;
+            background: #1a1a1a;
+            border-bottom: 1px solid #333;
+            padding: 0 24px;
+        }
+        
+        .tab {
+            padding: 12px 24px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            color: #888;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        
+        .tab:hover { color: #fff; }
+        .tab.active { color: #00d4ff; border-bottom-color: #00d4ff; }
+        
+        .tab-content {
+            display: none;
+            padding: 24px;
+        }
+        
+        .tab-content.active { display: block; }
+        
+        /* Cards */
+        .card {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+        
+        .card-header {
+            font-size: 14px;
+            color: #888;
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        /* Jobs Table */
+        .jobs-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .jobs-table th,
+        .jobs-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #333;
+            font-size: 13px;
+        }
+        
+        .jobs-table th {
+            color: #888;
+            font-weight: 500;
+        }
+        
+        .status-badge {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        
+        .status-badge.running { background: #1a4d1a; color: #00ff88; }
+        .status-badge.completed { background: #1a1a4d; color: #00d4ff; }
+        .status-badge.failed { background: #4d1a1a; color: #ff4444; }
+        .status-badge.pending { background: #2a2a2a; color: #888; }
+        
+        /* Progress Bar */
+        .progress-bar {
+            height: 6px;
+            background: #333;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00d4ff, #00ff88);
+            border-radius: 3px;
+            transition: width 0.3s ease;
+        }
+        
+        /* Real-time Log */
+        .log-container {
+            background: #0a0a0a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 16px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+        
+        .log-entry {
+            padding: 4px 0;
+            border-bottom: 1px solid #222;
+        }
+        
+        .log-entry.info { color: #00d4ff; }
+        .log-entry.success { color: #00ff88; }
+        .log-entry.error { color: #ff4444; }
+        .log-entry.warning { color: #ffaa00; }
+        
+        .log-time {
+            color: #666;
+            margin-right: 8px;
+        }
+        
+        /* Buttons */
+        .btn {
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+        
+        .btn-primary {
+            background: #00d4ff;
+            color: #000;
+        }
+        
+        .btn-primary:hover { background: #00bbee; }
+        
+        .btn-secondary {
+            background: #333;
+            color: #fff;
+        }
+        
+        .btn-secondary:hover { background: #444; }
+        
+        /* WebSocket Status */
+        .ws-status {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 12px 20px;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        
+        .stat-card {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        
+        .stat-value {
+            font-size: 32px;
+            font-weight: 600;
+            color: #00d4ff;
+        }
+        
+        .stat-label {
+            font-size: 13px;
+            color: #888;
+            margin-top: 4px;
+        }
+        
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+        
+        .empty-state svg {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">🐾 CellClaw Dashboard</div>
+        <div class="status-indicator">
+            <span id="serverCount">0</span> Servers
+        </div>
+    </div>
+    
+    <div class="tabs">
+        <div class="tab active" data-tab="jobs">Jobs</div>
+        <div class="tab" data-tab="servers">Servers</div>
+        <div class="tab" data-tab="skills">Skills</div>
+        <div class="tab" data-tab="config">Config</div>
+        <div class="tab" data-tab="logs">Real-time Logs</div>
+    </div>
+    
+    <div class="tab-content active" id="jobs">
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value" id="totalJobs">0</div>
+                <div class="stat-label">Total Jobs</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="runningJobs">0</div>
+                <div class="stat-label">Running</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="completedJobs">0</div>
+                <div class="stat-label">Completed</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="failedJobs">0</div>
+                <div class="stat-label">Failed</div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <span>Active Jobs</span>
+                <button class="btn btn-secondary" onclick="refreshJobs()">Refresh</button>
+            </div>
+            <div id="jobsTable">
+                <table class="jobs-table">
+                    <thead>
+                        <tr>
+                            <th>Job ID</th>
+                            <th>User</th>
+                            <th>Description</th>
+                            <th>Status</th>
+                            <th>Progress</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="jobsBody">
+                        <tr>
+                            <td colspan="7" class="empty-state">No active jobs</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <div class="tab-content" id="servers">
+        <div class="card">
+            <div class="card-header">
+                <span>Connected Servers</span>
+                <button class="btn btn-secondary" onclick="refreshServers()">Refresh</button>
+            </div>
+            <div id="serversTable">
+                <table class="jobs-table">
+                    <thead>
+                        <tr>
+                            <th>Server ID</th>
+                            <th>Host</th>
+                            <th>User</th>
+                            <th>Status</th>
+                            <th>Workdir</th>
+                        </tr>
+                    </thead>
+                    <tbody id="serversBody">
+                        <tr>
+                            <td colspan="5" class="empty-state">No servers connected</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <div class="tab-content" id="skills">
+        <div class="card">
+            <div class="card-header">
+                <span>Available Skills</span>
+                <button class="btn btn-secondary" onclick="refreshSkills()">Refresh</button>
+            </div>
+            <div id="skillsList">
+                <div class="empty-state">Loading skills...</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="tab-content" id="config">
+        <div class="card">
+            <div class="card-header">
+                <span>Configuration</span>
+            </div>
+            <div id="configList">
+                <pre style="color: #888; font-size: 12px;">Loading configuration...</pre>
+            </div>
+        </div>
+    </div>
+    
+    <div class="tab-content" id="logs">
+        <div class="card">
+            <div class="card-header">
+                <span>Real-time Logs</span>
+                <div style="display: flex; gap: 8px;">
+                    <select id="logFilter" style="background: #333; color: #fff; border: 1px solid #555; padding: 4px 8px; border-radius: 4px;">
+                        <option value="all">All</option>
+                        <option value="info">Info</option>
+                        <option value="success">Success</option>
+                        <option value="warning">Warning</option>
+                        <option value="error">Error</option>
+                    </select>
+                    <button class="btn btn-secondary" onclick="clearLogs()">Clear</button>
+                </div>
+            </div>
+            <div class="log-container" id="logContainer">
+                <div class="log-entry info">
+                    <span class="log-time">[--:--:--]</span>
+                    Dashboard initialized. Connecting to WebSocket...
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="ws-status" id="wsStatus">
+        <div class="status-dot disconnected" id="wsDot"></div>
+        <span id="wsText">Disconnected</span>
+    </div>
+    
+    <script>
+        // API Base URL
+        const API_BASE = 'http://127.0.0.1:19766';
+        let ws = null;
+        let logs = [];
+        
+        // Tab Navigation
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById(tab.dataset.tab).classList.add('active');
+            });
+        });
+        
+        // WebSocket Connection
+        function connectWebSocket() {
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `ws://127.0.0.1:19766/ws/dashboard`;
+            
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = () => {
+                document.getElementById('wsDot').className = 'status-dot connected';
+                document.getElementById('wsText').textContent = 'Connected';
+                addLog('success', 'WebSocket connected');
+            };
+            
+            ws.onmessage = (event) => {
+                try {
+                    const msg = JSON.parse(event.data);
+                    handleWebSocketMessage(msg);
+                } catch (e) {
+                    console.error('Failed to parse WebSocket message:', e);
+                }
+            };
+            
+            ws.onclose = () => {
+                document.getElementById('wsDot').className = 'status-dot disconnected';
+                document.getElementById('wsText').textContent = 'Disconnected';
+                addLog('warning', 'WebSocket disconnected, reconnecting...');
+                setTimeout(connectWebSocket, 3000);
+            };
+            
+            ws.onerror = (error) => {
+                addLog('error', 'WebSocket error');
+            };
+        }
+        
+        function handleWebSocketMessage(msg) {
+            const event = msg.event;
+            const data = msg.data;
+            
+            switch(event) {
+                case 'task_created':
+                    addLog('info', `Task created: ${data.task_id}`);
+                    refreshJobs();
+                    break;
+                case 'task_progress':
+                    updateJobProgress(data.task_id, data.progress);
+                    break;
+                case 'task_completed':
+                    addLog('success', `Task completed: ${data.task_id}`);
+                    refreshJobs();
+                    break;
+                case 'task_failed':
+                    addLog('error', `Task failed: ${data.task_id} - ${data.error}`);
+                    refreshJobs();
+                    break;
+                case 'notification':
+                    addLog(data.level || 'info', data.content);
+                    break;
+                case 'pong':
+                    // Heartbeat response
+                    break;
+            }
+        }
+        
+        // Logging
+        function addLog(type, message) {
+            const container = document.getElementById('logContainer');
+            const time = new Date().toLocaleTimeString();
+            const filter = document.getElementById('logFilter').value;
+            
+            if (filter !== 'all' && type !== filter) return;
+            
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.innerHTML = `<span class="log-time">[${time}]</span>${message}`;
+            container.appendChild(entry);
+            container.scrollTop = container.scrollHeight;
+            
+            logs.push({ time, type, message });
+        }
+        
+        function clearLogs() {
+            document.getElementById('logContainer').innerHTML = '';
+            logs = [];
+        }
+        
+        // Jobs
+        async function refreshJobs() {
+            try {
+                const res = await fetch(`${API_BASE}/jobs`);
+                const jobs = await res.json();
+                
+                updateJobsStats(jobs);
+                renderJobs(jobs);
+            } catch (e) {
+                addLog('error', `Failed to fetch jobs: ${e.message}`);
+            }
+        }
+        
+        function updateJobsStats(jobs) {
+            document.getElementById('totalJobs').textContent = jobs.length;
+            document.getElementById('runningJobs').textContent = jobs.filter(j => j.status === 'running').length;
+            document.getElementById('completedJobs').textContent = jobs.filter(j => j.status === 'done').length;
+            document.getElementById('failedJobs').textContent = jobs.filter(j => j.status === 'failed').length;
+        }
+        
+        function renderJobs(jobs) {
+            const tbody = document.getElementById('jobsBody');
+            
+            if (jobs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No active jobs</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = jobs.map(job => `
+                <tr>
+                    <td><code>${job.job_id}</code></td>
+                    <td>${job.user_id || '-'}</td>
+                    <td>${job.description || '-'}</td>
+                    <td><span class="status-badge ${job.status}">${job.status}</span></td>
+                    <td>
+                        <div style="width: 100px;">${job.progress || 0}%</div>
+                        <div class="progress-bar"><div class="progress-fill" style="width: ${job.progress || 0}%"></div></div>
+                    </td>
+                    <td>${job.created_at ? new Date(job.created_at).toLocaleString() : '-'}</td>
+                    <td>
+                        <button class="btn btn-secondary" onclick="viewLog('${job.job_id}')">Log</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+        
+        function updateJobProgress(taskId, progress) {
+            // Update specific job row in real-time
+            const rows = document.querySelectorAll('#jobsBody tr');
+            rows.forEach(row => {
+                if (row.cells[0].textContent.includes(taskId)) {
+                    row.cells[4].querySelector('div').textContent = `${Math.round(progress * 100)}%`;
+                    row.cells[4].querySelector('.progress-fill').style.width = `${progress * 100}%`;
+                }
+            });
+        }
+        
+        // Servers
+        async function refreshServers() {
+            try {
+                const res = await fetch(`${API_BASE}/servers`);
+                const servers = await res.json();
+                renderServers(servers);
+                document.getElementById('serverCount').textContent = servers.length;
+            } catch (e) {
+                addLog('error', `Failed to fetch servers: ${e.message}`);
+            }
+        }
+        
+        function renderServers(servers) {
+            const tbody = document.getElementById('serversBody');
+            
+            if (servers.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No servers connected</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = servers.map(s => `
+                <tr>
+                    <td><code>${s.server_id}</code></td>
+                    <td>${s.host}</td>
+                    <td>${s.user}</td>
+                    <td><span class="status-badge ${s.status}">${s.status || 'connected'}</span></td>
+                    <td><code>${s.workdir || '-'}</code></td>
+                </tr>
+            `).join('');
+        }
+        
+        // Skills
+        async function refreshSkills() {
+            try {
+                const res = await fetch(`${API_BASE}/skills`);
+                const skills = await res.json();
+                renderSkills(skills);
+            } catch (e) {
+                addLog('error', `Failed to fetch skills: ${e.message}`);
+            }
+        }
+        
+        function renderSkills(skills) {
+            const container = document.getElementById('skillsList');
+            
+            if (skills.length === 0) {
+                container.innerHTML = '<div class="empty-state">No skills available</div>';
+                return;
+            }
+            
+            container.innerHTML = skills.map(skill => `
+                <div class="card" style="margin: 8px 0;">
+                    <div style="font-weight: 600; color: #00d4ff;">${skill.name}</div>
+                    <div style="font-size: 12px; color: #888; margin-top: 4px;">${skill.description || skill.skill_id}</div>
+                </div>
+            `).join('');
+        }
+        
+        // Config
+        async function refreshConfig() {
+            // For security, config is shown in a simplified way
+            document.getElementById('configList').innerHTML = `
+                <pre style="color: #888; font-size: 12px;">
+Configuration loaded from .env file.
+API Settings:
+  - LLM Base URL: Configured
+  - API Key: [HIDDEN]
+  - Model: deepseek-chat
+
+Enable Multi-Agent Mode:
+  MULTI_AGENT_ENABLED=false
+
+WebSocket: Enabled on /ws/{user_id}
+                </pre>
+            `;
+        }
+        
+        // View Log
+        async function viewLog(jobId) {
+            try {
+                const res = await fetch(`${API_BASE}/jobs/${jobId}/log`);
+                const data = await res.json();
+                alert(data.log || 'No log available');
+            } catch (e) {
+                alert(`Failed to fetch log: ${e.message}`);
+            }
+        }
+        
+        // Initial Load
+        async function init() {
+            addLog('info', 'Dashboard starting...');
+            await Promise.all([
+                refreshJobs(),
+                refreshServers(),
+                refreshSkills(),
+                refreshConfig()
+            ]);
+            addLog('success', 'Dashboard initialized');
+            connectWebSocket();
+        }
+        
+        init();
+        
+        // Refresh every 30 seconds
+        setInterval(() => {
+            refreshJobs();
+            refreshServers();
+        }, 30000);
+    </script>
+</body>
+</html>
