@@ -27,13 +27,13 @@ echo -e "${BOLD}${CYAN}"
 echo -e "${BLUE}${BOLD}"
 cat << 'EOF'
  _____        _  _  _____  _                  
-/  __ \      | || |/  __ \| |                 
+/  __ \      | || |/  __ \| |                  
 | /  \/  ___ | || || /  \/| |  __ _ __      __
-| |     / _ \| || || |    | | / _` |\ \ /\ / /
-| \__/\|  __/| || || \__/\| || (_| | \ V  V / 
- \____/ \___||_||_| \____/|_| \__,_|  \_/\_/  
-                                              
-    CellClaw v1.0
+| |     / _ \| || || |    | | / _` |\ \ /\ / / 
+| \__/\|  __/| || || \__/\| || (_| | \ V  V /  
+ \____/ \___||_||_| \____/|_| \__,_|  \_/\_/   
+                                                  
+    CellClaw v2.0
 EOF
 echo -e "${NC}"
 echo -e "${BOLD}  AI Bioinformatics Engineer on Discord${NC}"
@@ -105,7 +105,7 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo ""
 
 # ── 1. Discord Bot Token ──────────────────────────────────────
-echo -e "${BOLD}[1/4] Discord Bot Token${NC}"
+echo -e "${BOLD}[1/5] Discord Bot Token${NC}"
 echo "  → Go to https://discord.com/developers/applications"
 echo "  → Create a bot → Bot → Reset Token → Copy"
 echo ""
@@ -123,7 +123,7 @@ success "Discord token saved"
 echo ""
 
 # ── 2. LLM Provider ──────────────────────────────────────────
-echo -e "${BOLD}[2/4] LLM Provider${NC}"
+echo -e "${BOLD}[2/5] LLM Provider${NC}"
 echo "  Supported providers:"
 echo "  1) DeepSeek    (https://platform.deepseek.com)  — Recommended"
 echo "  2) OpenAI      (https://platform.openai.com)"
@@ -174,8 +174,31 @@ LLM_MODEL=${LLM_MODEL:-$DEFAULT_MODEL}
 success "LLM configured: $PROVIDER_NAME / $LLM_MODEL"
 echo ""
 
-# ── 3. HTTP Proxy (optional) ──────────────────────────────────
-echo -e "${BOLD}[3/4] HTTP Proxy (optional)${NC}"
+# ── 3. Multi-Agent System ────────────────────────────────────
+echo -e "${BOLD}[3/5] Multi-Agent System (v2.0)${NC}"
+echo "  CellClaw v2.0 introduces a multi-agent architecture:"
+echo "  - Orchestrator: Coordinates workflow"
+echo "  - Planner: Task planning and skill detection"
+echo "  - Coder: Code generation with skill templates"
+echo "  - Reviewer: Code review and validation"
+echo "  - Executor: Job execution and monitoring"
+echo ""
+echo "  Recommended: Enable for better task handling"
+echo ""
+read -p "  Enable Multi-Agent System? [Y/n, default=Y]: " MULTI_AGENT_CHOICE
+MULTI_AGENT_CHOICE=${MULTI_AGENT_CHOICE:-Y}
+
+if [[ "$MULTI_AGENT_CHOICE" =~ ^[Nn]$ ]]; then
+    MULTI_AGENT_ENABLED="false"
+    echo "  Multi-Agent disabled"
+else
+    MULTI_AGENT_ENABLED="true"
+    success "Multi-Agent System enabled! (can be changed in .env later)"
+fi
+echo ""
+
+# ── 4. HTTP Proxy (optional) ──────────────────────────────────
+echo -e "${BOLD}[4/5] HTTP Proxy (optional)${NC}"
 echo "  Required if your machine needs a proxy to reach Discord/LLM APIs."
 echo "  Example: http://127.0.0.1:7890"
 echo "  Leave empty to skip."
@@ -188,8 +211,8 @@ else
 fi
 echo ""
 
-# ── 4. Bot personality (optional) ────────────────────────────
-echo -e "${BOLD}[4/4] Bot Identity (optional)${NC}"
+# ── 5. Bot personality (optional) ────────────────────────────
+echo -e "${BOLD}[5/5] Bot Identity (optional)${NC}"
 echo "  Customize your bot's name and personality."
 read -p "  Bot name [default: CellClaw]: " BOT_NAME
 BOT_NAME=${BOT_NAME:-CellClaw}
@@ -213,6 +236,19 @@ OMICS_LLM_API_KEY=${LLM_API_KEY}
 OMICS_LLM_MODEL=${LLM_MODEL}
 OMICS_LLM_MAX_TOKENS=4096
 
+# ── Multi-Agent System (v2.0) ─────────────────────────────────
+# Set to "true" to enable multi-agent architecture
+# Agents: Orchestrator, Planner, Coder, Reviewer, Executor
+MULTI_AGENT_ENABLED=${MULTI_AGENT_ENABLED}
+
+# ── Agent API Keys (optional, overrides default above) ──────────
+# If not set, agents use OMICS_LLM_* settings above
+# ORCHESTRATOR_API_KEY=
+# PLANNER_API_KEY=
+# CODER_API_KEY=
+# REVIEWER_API_KEY=
+# EXECUTOR_API_KEY=
+
 # ── Proxy ──────────────────────────────────────────────────
 $([ -n "$HTTP_PROXY" ] && echo "OMICS_LLM_PROXY=${HTTP_PROXY}" || echo "# OMICS_LLM_PROXY=http://127.0.0.1:7890")
 
@@ -225,7 +261,7 @@ EOF
 
 success ".env written"
 
-# ── Make scripts executable ───────────────────────────────────
+# ── Make scripts executable ────────────────────────────────────
 chmod +x start.sh stop.sh restart.sh 2>/dev/null || true
 
 # ── Done ──────────────────────────────────────────────────────
@@ -239,6 +275,11 @@ echo "  1. Invited to your server with Message Content Intent enabled"
 echo "  2. Go to Developer Portal → Bot → Privileged Gateway Intents"
 echo "     ✓ MESSAGE CONTENT INTENT"
 echo ""
+if [ "$MULTI_AGENT_ENABLED" = "true" ]; then
+echo "  Multi-Agent System: ${GREEN}ENABLED${NC}"
+echo "  (Configure agent-specific API keys in .env if needed)"
+echo ""
+fi
 echo "  Start the bot:"
 echo -e "    ${BOLD}bash start.sh${NC}"
 echo ""
