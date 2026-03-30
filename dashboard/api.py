@@ -311,6 +311,28 @@ async def get_stats():
 
 if __name__ == "__main__":
     import uvicorn
+    # WebSocket endpoint for real-time updates
+    @app.websocket("/ws/{user_id}")
+    async def websocket_endpoint(websocket: WebSocket, user_id: str):
+        await websocket.accept()
+        
+        # Get WebSocket manager
+        from agents.websocket_manager import get_websocket_manager
+        ws_manager = get_websocket_manager()
+        
+        # Register connection
+        await ws_manager.handle_connect(websocket, user_id=user_id)
+        
+        try:
+            while True:
+                data = await websocket.receive_text()
+                await ws_manager.handle_message(websocket, data)
+        except WebSocketDisconnect:
+            await ws_manager.handle_disconnect(websocket)
+        except Exception as e:
+            logger.error(f"WebSocket error: {e}")
+            await ws_manager.handle_disconnect(websocket)
+
     uvicorn.run(app, host="127.0.0.1", port=19766)
 
 

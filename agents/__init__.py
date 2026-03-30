@@ -33,6 +33,15 @@ from agents.wrapper import (
     disable_multi_agent
 )
 
+from agents.websocket_manager import (
+    WebSocketManager,
+    ConnectionManager,
+    WSMessage,
+    EventType,
+    get_websocket_manager,
+    init_websocket_manager
+)
+
 __all__ = [
     # Base
     "BaseAgent",
@@ -72,6 +81,14 @@ __all__ = [
     "is_multi_agent_enabled",
     "enable_multi_agent",
     "disable_multi_agent",
+    
+    # WebSocket
+    "WebSocketManager",
+    "ConnectionManager",
+    "WSMessage",
+    "EventType",
+    "get_websocket_manager",
+    "init_websocket_manager",
 ]
 
 __version__ = "2.0.0"
