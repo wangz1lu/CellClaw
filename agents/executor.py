@@ -3,335 +3,347 @@ ExecutorAgent - Execution Monitoring
 ===================================
 
 Handles job submission, status polling, result collection, and Dashboard sync.
+Reports to user INDEPENDENTLY via callbacks.
 """
 
 from __future__ import annotations
 import os
 import asyncio
 import logging
-from typing import Optional, Callable
-from dataclasses import dataclass
+from typing import Optional, Callable, Dict, List
+from dataclasses import dataclass, field
 from datetime import datetime
-
-from agents.base import BaseAgent
-from agents.models import AgentConfig, AgentType, TaskStep, TaskStatus, ExecutionPlan
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass
 class JobStatus:
     """Status of a running job"""
+    PENDING = "pending"
+    RUNNING = "running"
+    DONE = "done"
+    FAILED = "failed"
+
+
+@dataclass
+class JobInfo:
+    """Information about a tracked job"""
     job_id: str
-    status: str  # "pending", "running", "done", "failed"
-    progress: float = 0.0  # 0.0 - 1.0
-    result_files: list[str] = None
+    user_id: str
+    channel_id: Optional[str]
+    description: str
+    skill_used: Optional[str]
+    status: str = JobStatus.PENDING
+    progress: float = 0.0
+    result_files: list = field(default_factory=list)
     error_message: Optional[str] = None
     log_path: Optional[str] = None
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
-    
-    def __post_init__(self):
-        if self.result_files is None:
-            self.result_files = []
 
 
 class ExecutorAgent:
     """
-    ExecutorAgent handles job execution and monitoring.
+    ExecutorAgent - The ONLY agent that reports back to user independently.
     
     Responsibilities:
     - Submit jobs to background execution
-    - Poll job status
+    - Report progress/status to user via callbacks (independent communication)
     - Collect results
     - Sync with Dashboard
-    - Notify users
-    """
     
-    def __init__(self, config: AgentConfig = None):
-        self.config = config or AgentConfig.default_for(AgentType.EXECUTOR)
-        self.name = self.config.name
-        self.base = BaseAgent()
-        
-        # API config
-        self._api_key = self.config.api_key or os.getenv("EXECUTOR_API_KEY") or os.getenv("OMICS_LLM_API_KEY")
-        
+    Key difference from other agents:
+    - Does NOT wait to be asked - reports proactively
+    - Uses callbacks to notify Orchestrator → User
+    """
+
+    def __init__(self, config=None):
+        self.config = config
+        self.name = "executor"
+
+        # SSH Manager (will be set by integration)
+        self._ssh = None
+
+        # User notification callback (set by Orchestrator)
+        self._user_notify_callback: Optional[Callable] = None
+
         # Active jobs tracking
-        self._active_jobs: dict[str, JobStatus] = {}
-        
+        self._active_jobs: Dict[str, JobInfo] = {}
+
         # Dashboard sync callback
         self._dashboard_sync: Optional[Callable] = None
-        
-        # Notification callback
-        self._notify_callback: Optional[Callable] = None
-    
+
+        logger.info("ExecutorAgent initialized")
+
+    def set_notify_callback(self, callback: Callable):
+        """Set callback for Orchestrator to receive executor events"""
+        # Legacy - kept for compatibility
+        pass
+
+    def set_user_notify_callback(self, callback: Callable):
+        """Set callback for direct user notifications"""
+        self._user_notify_callback = callback
+
+    def set_dashboard_sync(self, callback: Callable):
+        """Set callback for dashboard sync"""
+        self._dashboard_sync = callback
+
     # ───────────────────────────────────────────────────────────────
     # Job Submission
     # ───────────────────────────────────────────────────────────────
-    
-    async def submit(self, code: str, user_id: str, 
-                   script_path: str = None,
-                   language: str = "R") -> str:
+
+    async def submit(self, script_path: str, user_id: str,
+                     channel_id: str = None,
+                     description: str = "分析任务",
+                     skill_used: str = None) -> str:
         """
         Submit a job for background execution.
+        Executor reports to user INDEPENDENTLY when job starts/updates/completes.
         
         Args:
-            code: Code to execute
+            script_path: Path to the script to execute
             user_id: User who submitted the job
-            script_path: Path to script file (if pre-saved)
-            language: "R" or "Python"
+            channel_id: Discord channel for notifications
+            description: Job description
+            skill_used: Skill used for this job
             
         Returns:
             job_id: Unique job identifier
         """
         import secrets
-        
+
         job_id = secrets.token_hex(4)
-        
-        # Create job status
-        job_status = JobStatus(
+
+        # Create job info
+        job_info = JobInfo(
             job_id=job_id,
-            status="pending",
-            started_at=datetime.now(),
+            user_id=user_id,
+            channel_id=channel_id,
+            description=description,
+            skill_used=skill_used,
+            status=JobStatus.RUNNING,
+            started_at=datetime.now()
         )
-        
-        self._active_jobs[job_id] = job_status
-        
-        logger.info(f"Submitting job {job_id} for user {user_id}")
-        
-        # TODO: Integrate with SSHManager.submit_background()
-        # For now, just track
-        
-        return job_id
-    
-    async def submit_script(self, script_path: str, user_id: str,
-                          description: str = "分析任务") -> str:
-        """
-        Submit an existing script file for execution.
-        
-        Args:
-            script_path: Path to the script
-            user_id: User ID
-            description: Job description
-            
-        Returns:
-            job_id
-        """
-        import secrets
-        
-        job_id = secrets.token_hex(4)
-        
-        job_status = JobStatus(
-            job_id=job_id,
-            status="running",
-            started_at=datetime.now(),
-            log_path=f"/tmp/cell_job_{job_id}.log",
-        )
-        
-        self._active_jobs[job_id] = job_status
-        
-        # TODO: Call SSHManager.submit_background()
-        
-        logger.info(f"Submitted script {script_path} as job {job_id}")
-        
-        return job_id
-    
-    # ───────────────────────────────────────────────────────────────
-    # Status Polling
-    # ───────────────────────────────────────────────────────────────
-    
-    async def poll_status(self, job_id: str) -> JobStatus:
-        """
-        Poll the status of a job.
-        
-        Args:
-            job_id: Job identifier
-            
-        Returns:
-            JobStatus with current status
-        """
-        job_status = self._active_jobs.get(job_id)
-        
-        if not job_status:
-            logger.warning(f"Job {job_id} not found in active jobs")
-            return None
-        
-        # TODO: Actually poll via SSHManager.poll_job()
-        
-        return job_status
-    
-    async def wait_for_completion(self, job_id: str, 
-                                 interval: int = 30,
-                                 max_wait: int = 3600) -> JobStatus:
-        """
-        Wait for a job to complete.
-        
-        Args:
-            job_id: Job identifier
-            interval: Seconds between polls
-            max_wait: Maximum seconds to wait
-            
-        Returns:
-            Final JobStatus
-        """
-        elapsed = 0
-        
-        while elapsed < max_wait:
-            status = await self.poll_status(job_id)
-            
-            if status and status.status in ["done", "failed"]:
-                return status
-            
-            await asyncio.sleep(interval)
-            elapsed += interval
-            
-            # Update progress
-            if status:
-                status.progress = min(elapsed / max_wait, 0.99)
-        
-        # Timeout
-        if status:
-            status.status = "failed"
-            status.error_message = "Job timed out"
-        
-        return status
-    
-    # ───────────────────────────────────────────────────────────────
-    # Result Collection
-    # ───────────────────────────────────────────────────────────────
-    
-    async def collect_results(self, job_id: str) -> list[str]:
-        """
-        Collect result files from a completed job.
-        
-        Args:
-            job_id: Job identifier
-            
-        Returns:
-            List of result file paths
-        """
-        job_status = self._active_jobs.get(job_id)
-        
-        if not job_status:
-            return []
-        
-        # TODO: Call SSHManager.collect_job_results()
-        
-        return job_status.result_files or []
-    
-    async def sync_dashboard(self, job_id: str, plan: ExecutionPlan = None):
-        """
-        Sync job status to Dashboard.
-        
-        Args:
-            job_id: Job identifier
-            plan: Associated execution plan (optional)
-        """
-        if not self._dashboard_sync:
-            logger.debug("No dashboard sync callback configured")
-            return
-        
-        job_status = self._active_jobs.get(job_id)
-        
+
+        self._active_jobs[job_id] = job_info
+
+        logger.info(f"Executor: Submitting job {job_id} for user {user_id}")
+
         try:
-            await self._dashboard_sync({
-                "job_id": job_id,
-                "status": job_status.status if job_status else "unknown",
-                "progress": job_status.progress if job_status else 0,
-                "result_files": job_status.result_files if job_status else [],
-                "error": job_status.error_message if job_status else None,
-                "plan": plan.to_dict() if plan else None,
+            # Submit to SSH
+            if self._ssh:
+                run_cmd = f"Rscript {script_path}" if script_path.endswith(".R") else f"python {script_path}"
+                job = await self._ssh.submit_background(
+                    discord_user_id=user_id,
+                    run_cmd=run_cmd,
+                    description=description
+                )
+                job_info.log_path = job.log_path
+                # Use actual job ID from SSH
+                actual_job_id = job.job_id
+            else:
+                actual_job_id = job_id
+
+            # INDEPENDENT NOTIFICATION: Job started
+            await self._notify_user({
+                "type": "task_started",
+                "job_id": actual_job_id,
+                "user_id": user_id,
+                "channel_id": channel_id,
+                "skill_used": skill_used,
+                "message": (
+                    f"✅ 任务已开始执行\n"
+                    f"任务 PID: `{actual_job_id}`\n"
+                    f"描述: {description}"
+                )
             })
+
+            # Start monitoring in background
+            asyncio.create_task(self._monitor_job(actual_job_id, user_id, channel_id))
+
+            return actual_job_id
+
         except Exception as e:
-            logger.error(f"Dashboard sync failed: {e}")
-    
+            logger.error(f"Executor: Job submission failed: {e}")
+            job_info.status = JobStatus.FAILED
+            job_info.error_message = str(e)
+
+            await self._notify_user({
+                "type": "failed",
+                "job_id": job_id,
+                "user_id": user_id,
+                "channel_id": channel_id,
+                "error": str(e),
+                "message": f"❌ 任务提交失败: {e}"
+            })
+
+            raise
+
+    async def _monitor_job(self, job_id: str, user_id: str, channel_id: str):
+        """Monitor job and report status independently"""
+        max_polls = 120  # 1 hour max
+        poll_interval = 30  # 30 seconds
+
+        for i in range(max_polls):
+            await asyncio.sleep(poll_interval)
+
+            job_info = self._active_jobs.get(job_id)
+            if not job_info:
+                break
+
+            try:
+                # Poll status
+                if self._ssh:
+                    job = await self._ssh.poll_job(job_id, user_id)
+
+                    if job.is_done:
+                        if job.is_success:
+                            job_info.status = JobStatus.DONE
+                            job_info.finished_at = datetime.now()
+
+                            # INDEPENDENT NOTIFICATION: Completed
+                            await self._notify_user({
+                                "type": "completed",
+                                "job_id": job_id,
+                                "user_id": user_id,
+                                "channel_id": channel_id,
+                                "result_files": getattr(job, 'result_files', []),
+                                "message": (
+                                    f"✅ 任务 `{job_id}` 成功完成！\n"
+                                    f"描述: {job_info.description}"
+                                )
+                            })
+
+                        else:
+                            job_info.status = JobStatus.FAILED
+                            job_info.error_message = getattr(job, 'error_summary', 'Unknown error')
+                            job_info.finished_at = datetime.now()
+
+                            # INDEPENDENT NOTIFICATION: Failed
+                            await self._notify_user({
+                                "type": "failed",
+                                "job_id": job_id,
+                                "user_id": user_id,
+                                "channel_id": channel_id,
+                                "error": job_info.error_message,
+                                "message": (
+                                    f"❌ 任务 `{job_id}` 失败！\n"
+                                    f"错误: {job_info.error_message}"
+                                )
+                            })
+
+                        # Sync to dashboard
+                        await self._sync_dashboard(job_info)
+                        break
+
+                    else:
+                        # INDEPENDENT NOTIFICATION: Progress
+                        progress = (i + 1) / max_polls
+                        job_info.progress = progress
+
+                        # Only notify every few polls to avoid spam
+                        if i % 3 == 0:
+                            await self._notify_user({
+                                "type": "progress",
+                                "job_id": job_id,
+                                "user_id": user_id,
+                                "channel_id": channel_id,
+                                "progress": progress,
+                                "message": (
+                                    f"⏳ 任务 `{job_id}` 执行中... "
+                                    f"{int(progress * 100)}%\n"
+                                    f"描述: {job_info.description}"
+                                )
+                            })
+
+            except Exception as e:
+                logger.error(f"Executor: Monitor error for job {job_id}: {e}")
+                break
+
     # ───────────────────────────────────────────────────────────────
     # Notifications
     # ───────────────────────────────────────────────────────────────
-    
-    def set_notify_callback(self, callback: Callable):
-        """Set callback for job completion notifications"""
-        self._notify_callback = callback
-    
-    async def notify_complete(self, job_id: str, user_id: str):
+
+    async def _notify_user(self, event: dict):
         """
-        Send notification when job completes.
+        Send notification to user INDEPENDENTLY.
+        This is the core of ExecutorAgent's proactive communication.
         """
-        if not self._notify_callback:
-            logger.debug("No notification callback configured")
+        if self._user_notify_callback:
+            try:
+                self._user_notify_callback(event)
+            except Exception as e:
+                logger.error(f"Executor: Notify callback failed: {e}")
+        else:
+            # Just log if no callback
+            logger.info(f"Executor event (no callback): {event.get('type')} - {event.get('message', '')[:50]}")
+
+    # ───────────────────────────────────────────────────────────────
+    # Dashboard Sync
+    # ───────────────────────────────────────────────────────────────
+
+    async def _sync_dashboard(self, job_info: JobInfo):
+        """Sync job status to Dashboard"""
+        if not self._dashboard_sync:
             return
-        
-        job_status = self._active_jobs.get(job_id)
-        
+
         try:
-            await self._notify_callback({
-                "job_id": job_id,
-                "user_id": user_id,
-                "status": job_status.status if job_status else "unknown",
-                "result_files": job_status.result_files if job_status else [],
-                "error": job_status.error_message if job_status else None,
+            await self._dashboard_sync({
+                "job_id": job_info.job_id,
+                "user_id": job_info.user_id,
+                "status": job_info.status,
+                "progress": job_info.progress,
+                "result_files": job_info.result_files,
+                "error": job_info.error_message,
+                "description": job_info.description,
             })
         except Exception as e:
-            logger.error(f"Notification failed: {e}")
-    
+            logger.error(f"Dashboard sync failed: {e}")
+
     # ───────────────────────────────────────────────────────────────
     # Job Management
     # ───────────────────────────────────────────────────────────────
-    
-    def get_active_jobs(self, user_id: str = None) -> list[JobStatus]:
+
+    def get_active_jobs(self, user_id: str = None) -> List[JobInfo]:
         """Get all active jobs for a user"""
         if user_id:
-            # TODO: Filter by user_id
-            return list(self._active_jobs.values())
+            return [j for j in self._active_jobs.values() if j.user_id == user_id]
         return list(self._active_jobs.values())
-    
-    def get_job_status(self, job_id: str) -> Optional[JobStatus]:
+
+    def get_job_status(self, job_id: str) -> Optional[JobInfo]:
         """Get status of a specific job"""
         return self._active_jobs.get(job_id)
-    
+
     async def cancel_job(self, job_id: str) -> bool:
-        """
-        Cancel a running job.
-        
-        Returns:
-            True if cancelled, False if not found or already done
-        """
-        job_status = self._active_jobs.get(job_id)
-        
-        if not job_status:
+        """Cancel a running job"""
+        job_info = self._active_jobs.get(job_id)
+
+        if not job_info or job_info.status != JobStatus.RUNNING:
             return False
-        
-        if job_status.status in ["done", "failed"]:
-            return False
-        
-        # TODO: Call SSHManager.cancel_job()
-        
-        job_status.status = "cancelled"
-        job_status.finished_at = datetime.now()
-        
+
+        # TODO: Call SSH cancel
+        job_info.status = JobStatus.FAILED
+        job_info.error_message = "Cancelled by user"
+        job_info.finished_at = datetime.now()
+
         return True
-    
+
     def cleanup_completed(self, max_age_hours: int = 24):
-        """
-        Clean up old completed jobs from memory.
-        
-        Args:
-            max_age_hours: Remove jobs older than this
-        """
+        """Clean up old completed jobs"""
         now = datetime.now()
         to_remove = []
-        
-        for job_id, status in self._active_jobs.items():
-            if status.finished_at:
-                age = (now - status.finished_at).total_seconds() / 3600
+
+        for job_id, job in self._active_jobs.items():
+            if job.finished_at:
+                age = (now - job.finished_at).total_seconds() / 3600
                 if age > max_age_hours:
                     to_remove.append(job_id)
-        
+
         for job_id in to_remove:
             del self._active_jobs[job_id]
-        
+
         if to_remove:
             logger.info(f"Cleaned up {len(to_remove)} old jobs")
-    
+
     def __repr__(self) -> str:
-        return f"<ExecutorAgent: {self.name}>"
+        return f"<ExecutorAgent: {self.name}, active_jobs={len(self._active_jobs)}>"
