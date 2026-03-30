@@ -32,6 +32,7 @@ from agents.wrapper import (
     enable_multi_agent,
     disable_multi_agent
 )
+from agents.client import MultiAgentClient
 
 from agents.websocket_manager import (
     WebSocketManager,
@@ -81,6 +82,9 @@ __all__ = [
     "is_multi_agent_enabled",
     "enable_multi_agent",
     "disable_multi_agent",
+    
+    # Client
+    "MultiAgentClient",
     
     # WebSocket
     "WebSocketManager",

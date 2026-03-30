@@ -37,6 +37,14 @@ from .llm import get_llm_client, ToolCall
 from .memory import MemoryManager
 from .session_store import SessionManager
 
+# Multi-Agent System (v2.0)
+try:
+    from agents.client import MultiAgentClient
+    MULTI_AGENT_AVAILABLE = True
+except ImportError:
+    MULTI_AGENT_AVAILABLE = False
+    logger.warning("Multi-Agent system not available")
+
 logger = logging.getLogger(__name__)
 
 
@@ -84,6 +92,18 @@ class CellClawAgent:
 
         # Tracks active job polling tasks per user
         self._poll_tasks: dict[str, asyncio.Task] = {}
+
+        # Initialize Multi-Agent client (v2.0)
+        self._multi_agent_enabled = (
+            os.getenv("MULTI_AGENT_ENABLED", "false").lower() == "true" and
+            MULTI_AGENT_AVAILABLE
+        )
+        if self._multi_agent_enabled:
+            self._multi_agent = MultiAgentClient(ssh_manager=self._ssh)
+            logger.info("Multi-Agent System ENABLED (v2.0)")
+        else:
+            self._multi_agent = None
+            logger.info("Multi-Agent System disabled, using legacy mode")
 
         logger.info(f"CellClawAgent initialized | workspace={self._workspace}")
 
@@ -134,7 +154,7 @@ class CellClawAgent:
             response = self._cmd_result_to_response(cmd_result, discord_user_id)
             return response
 
-        # 3. Natural language → agent loop
+        # 3. Natural language → Multi-Agent or legacy agent loop
         session = self._sessions.get(discord_user_id)
 
         # Auto-compact if history is getting too long
@@ -144,7 +164,27 @@ class CellClawAgent:
         # Persist user message
         session.add({"role": "user", "content": message})
 
-        # Run agent (pass images for vision-capable models)
+        # Check if Multi-Agent should handle this
+        if self._multi_agent_enabled and self._multi_agent:
+            # Use Multi-Agent system for task processing
+            ma_result = await self._multi_agent.process(
+                message=message,
+                user_id=discord_user_id,
+                channel_id=channel_id
+            )
+            
+            # Persist assistant reply
+            if ma_result.get("text"):
+                session.add({"role": "assistant", "content": ma_result["text"]})
+            
+            # Convert to AgentResponse
+            response = AgentResponse(
+                text=ma_result.get("text", ""),
+                job_id=ma_result.get("job_id")
+            )
+            return response
+
+        # Fall back to legacy agent loop
         response = await self._handle_nl(message, discord_user_id, channel_id, images=images)
 
         # Persist assistant reply
