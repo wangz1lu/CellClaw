@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from agents.base import BaseAgent
 from agents.models import AgentConfig, AgentType, TaskStep, ExecutionPlan
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -108,7 +109,7 @@ class PlannerAgent:
     # Intent Understanding
     # ───────────────────────────────────────────────────────────────
     
-    async def understand(self, message: str, user_id: str) -> IntentResult:
+    async def understand(self, message: str, user_id: str) -> Intent:
         """
         Understand user intent from message.
         
@@ -143,7 +144,7 @@ class PlannerAgent:
         
         confidence = 0.9 if skill_needed else (0.7 if intent_type != "query" else 0.5)
         
-        result = IntentResult(
+        result = Intent(
             intent_type=intent_type,
             is_simple=is_simple,
             confidence=confidence,
@@ -300,7 +301,7 @@ class PlannerAgent:
     # LLM Integration (Optional)
     # ───────────────────────────────────────────────────────────────
     
-    async def understand_with_llm(self, message: str, user_id: str) -> IntentResult:
+    async def understand_with_llm(self, message: str, user_id: str) -> Intent:
         """
         Use LLM for more sophisticated intent understanding.
         Falls back to keyword-based if LLM unavailable.
