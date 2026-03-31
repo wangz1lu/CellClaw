@@ -388,6 +388,12 @@ Respond with ONLY the category word, nothing else."""
         
         logger.info(f"Task intent: {intent.intent_type}, simple={intent.is_simple_task}, skill={intent.skill_needed}")
 
+        # Query types -> use LLM to answer from context (no execution needed)
+        if intent.intent_type == "query":
+            # User is asking for information, not asking to run analysis
+            # Let LLM answer directly from context
+            return await self._llm_converse(message, user_id)
+        
         # Route to simple or complex handler
         if intent.is_simple_task:
             return await self._handle_simple(message, intent, user_id, channel_id)
