@@ -591,12 +591,11 @@ class OrchestratorAgent:
 
     async def _llm_chat(self, message: str, user_id: str) -> str:
         """
-        LLM chat - uses intelligence to understand user needs.
+        LLM chat - knows when to answer directly vs when to plan tasks.
         """
-        context = self._build_context(user_id)
         msg_lower = message.lower()
         
-        # Direct simple responses
+        # Simple greetings - direct response
         if any(g in msg_lower for g in ["你好", "hi", "hello", "嗨", "在吗"]):
             return "你好！我是 CellClaw，你的生物信息分析助手。有什么可以帮你的？"
         if "谢谢" in msg_lower:
@@ -606,24 +605,27 @@ class OrchestratorAgent:
         if "你是谁" in msg_lower or "who are you" in msg_lower:
             return "我是 CellClaw，一个专注于生物信息学分析的 AI 助手。我可以帮你做单细胞分析、数据下载、脚本编写等。"
         
-        # Use LLM to understand what user needs and respond
-        prompt = (
-            "用户: " + message + "\n\n" +
-            "当前环境: " + context + "\n\n" +
-            "分析用户需求并回应：\n" +
-            "- 如果用户要创建/编写/生成脚本/代码 -> 说'好的，我来帮你写一个XXX脚本'\n" +
-            "- 如果用户要执行分析/任务 -> 说'好的，我来帮你执行XXX分析'\n" +
-            "- 如果用户问信息问题 -> 给出答案\n" +
-            "- 其他 -> 简洁回应\n" +
-            "直接回应用户，简洁明确。"
-        )
+        # If asking about environment info - return REAL context directly
+        if any(k in msg_lower for k in ["环境", "信息", "状态", "当前", "情况"]):
+            context = self._build_context(user_id)
+            if context and context != "无":
+                return "当前环境信息：\n" + context
+            return "暂无环境信息。请先配置服务器和工作目录。"
         
+        # For task requests - use LLM to understand
+        if any(k in msg_lower for k in ["帮我", "生成", "编写", "创建", "执行", "做", "跑"]):
+            prompt = ("用户: " + message + "  判断用户想要什么任务，用一句话确认。")
+            response = await self._call_llm(prompt)
+            if response:
+                return response
+        
+        # Default - use LLM
+        prompt = ("用户: " + message + "  请简洁回应用户。")
         response = await self._call_llm(prompt)
-        
         if response:
             return response
         
-        return "我明白了。请问要执行吗？"
+        return "我明白了。请问要帮你做什么？"
 
     # ───────────────────────────────────────────────────────────────
     # Executor Event Handler
