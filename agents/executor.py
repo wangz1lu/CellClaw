@@ -72,6 +72,9 @@ class ExecutorAgent:
 
         # Dashboard sync callback
         self._dashboard_sync: Optional[Callable] = None
+        
+        # HTTP client for Dashboard sync
+        self._dashboard_url = os.getenv("DASHBOARD_URL", "http://localhost:7860")
 
         logger.info("ExecutorAgent initialized")
 
@@ -303,12 +306,11 @@ class ExecutorAgent:
     # ───────────────────────────────────────────────────────────────
 
     async def _sync_dashboard(self, job_info: JobInfo):
-        """Sync job status to Dashboard"""
-        if not self._dashboard_sync:
-            return
-
+        """Sync job status to Dashboard via HTTP"""
         try:
-            await self._dashboard_sync({
+            import aiohttp
+            
+            payload = {
                 "job_id": job_info.job_id,
                 "user_id": job_info.user_id,
                 "status": job_info.status,
@@ -316,9 +318,21 @@ class ExecutorAgent:
                 "result_files": job_info.result_files,
                 "error": job_info.error_message,
                 "description": job_info.description,
-            })
+                "log_path": job_info.log_path,
+            }
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{self._dashboard_url}/api/jobs/update",
+                    json=payload,
+                    timeout=aiohttp.ClientTimeout(total=5)
+                ) as resp:
+                    if resp.status == 200:
+                        logger.debug(f"Dashboard synced: {job_info.job_id}")
+                    else:
+                        logger.warning(f"Dashboard sync failed: {resp.status}")
         except Exception as e:
-            logger.error(f"Dashboard sync failed: {e}")
+            logger.debug(f"Dashboard sync error: {e}")
 
     # ───────────────────────────────────────────────────────────────
     # Job Management

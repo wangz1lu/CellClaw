@@ -337,5 +337,65 @@ class ReviewerAgent:
         
         return fixed_code
 
+    async def check_from_ssh(self, remote_path: str, language: str) -> ReviewResult:
+        """
+        Read script from SSH and check it.
+        Used in the full pipeline after Coder writes to SSH.
+        """
+        import subprocess
+        
+        # Read from SSH
+        if hasattr(self.base, '_ssh_manager') and self.base._ssh_manager:
+            try:
+                # Use scp or sftp to read
+                result = await self.base._ssh_manager.run(
+                    self.base._ssh_manager._registry._user_id or "user",
+                    f"cat {remote_path}"
+                )
+                if result and result.success:
+                    return await self.check(result.stdout, language)
+            except:
+                pass
+        
+        # Fallback - read locally if exists
+        if os.path.exists(remote_path):
+            with open(remote_path, 'r') as f:
+                code = f.read()
+            return await self.check(code, language)
+        
+        # Return failed result if can't read
+        return ReviewResult(
+            is_valid=False,
+            issues=[ReviewIssue(category="file", severity="error", message=f"Cannot read {remote_path}")],
+            can_execute=False
+        )
+
+    async def fix_from_ssh(self, remote_path: str, issues: list) -> str:
+        """
+        Fix script issues and rewrite to SSH.
+        """
+        # Read current code
+        if hasattr(self.base, '_ssh_manager') and self.base._ssh_manager:
+            try:
+                result = await self.base._ssh_manager.run(
+                    self.base._ssh_manager._registry._user_id or "user",
+                    f"cat {remote_path}"
+                )
+                if result and result.success:
+                    code = result.stdout
+                    fixed_code = await self.fix(code, issues)
+                    # Rewrite to SSH
+                    escaped_code = fixed_code.replace("'", "'\''").replace("\n", "\\n")
+                    cmd = f"cat > {remote_path} << 'SCRIPT_EOF'\n{fixed_code}\nSCRIPT_EOF"
+                    await self.base._ssh_manager.run(
+                        self.base._ssh_manager._registry._user_id or "user",
+                        cmd
+                    )
+                    return fixed_code
+            except:
+                pass
+        
+        return ""
+
     def __repr__(self) -> str:
         return f"<ReviewerAgent: {self.name}>"

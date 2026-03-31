@@ -457,16 +457,146 @@ class OrchestratorAgent:
         )
 
     async def _execute_analyze(self, params: dict, user_id: str) -> str:
-        """Execute the multi-agent analysis flow."""
+        """
+        Full pipeline: Planner → Coder → Reviewer → Executor
+        
+        1. Planner: Check skills, create plan, save plan.txt to workdir
+        2. Coder: Write script to SSH workdir
+        3. Reviewer: Read from SSH, check, Coder rewrites if needed
+        4. Executor: Submit with nohup, sync status to Dashboard
+        """
         task = params.get("task", "")
-
-        # Use planner to understand
+        
+        # Notify starting
+        await self._notify_progress("开始分析流程", "Planner 正在分析任务...")
+        
+        # Step 1: Planner
         intent = await self.planner.understand(task, user_id)
-
-        if intent.is_simple_task:
-            return await self._handle_simple_analysis(intent, task, user_id)
+        
+        # Check if existing skills can fulfill
+        skill_needed = intent.skill_needed
+        if skill_needed:
+            plan_text = f"任务: {task}\n使用技能: {skill_needed}\n\n分析计划:\n"
+            plan_text += f"1. 使用 {skill_needed} 技能\n"
+            plan_text += f"2. 生成代码\n3. 审查代码\n4. 提交执行"
         else:
-            return await self._handle_complex_analysis(intent, task, user_id)
+            plan_text = f"任务: {task}\n\n分析计划:\n1. 生成代码\n2. 审查代码\n3. 提交执行"
+        
+        # Save plan to workdir
+        plan_path = await self._save_plan_to_workdir(user_id, plan_text, task)
+        await self._notify_progress("计划已生成", f"计划文件: {plan_path}")
+        
+        # Step 2-3: Coder → Reviewer loop
+        max_iterations = 3
+        for i in range(max_iterations):
+            # Coder generates and writes to SSH
+            code_result = await self.coder.generate(
+                task_description=task,
+                skill_id=skill_needed,
+                language="R"
+            )
+            
+            # Save to SSH workdir
+            script_path = await self._save_script_to_ssh(user_id, code_result.code, code_result.language, task)
+            await self._notify_progress(f"代码已生成 ({i+1})", f"脚本: {script_path}")
+            
+            # Reviewer reads from SSH and checks
+            review_result = await self.reviewer.check_from_ssh(script_path, code_result.language)
+            
+            if review_result.can_execute:
+                # Review passed
+                await self._notify_progress("代码审查通过", f"脚本位置: {script_path}")
+                break
+            else:
+                # Need revision
+                issues = "\n".join([f"- [{i.severity}] {i.message}" for i in review_result.issues])
+                await self._notify_progress(f"需要修改 ({i+1})", issues)
+                code_result.code = await self.reviewer.fix_from_ssh(script_path, review_result.issues)
+                # Coder rewrites
+                continue
+        
+        # Step 4: Executor submits with nohup
+        job_id = await self.executor.submit(
+            script_path=script_path,
+            user_id=user_id,
+            channel_id=None,
+            description=task,
+            skill_used=skill_needed,
+            script_content=code_result.code
+        )
+        
+        return (
+            f"✅ 分析流程已完成
+
+"
+            f"计划文件: {plan_path}
+"
+            f"脚本位置: {script_path}
+"
+            f"任务 ID: {job_id}
+
+"
+            f"任务正在后台执行，完成后会通知你"
+        )
+
+    async def _save_plan_to_workdir(self, user_id: str, plan_text: str, task: str) -> str:
+        """Save plan to SSH workdir."""
+        import time
+        import secrets
+        
+        plan_filename = f"plan_{secrets.token_hex(4)}.txt"
+        
+        if self._ssh_manager:
+            try:
+                session = self._ssh_manager._registry.get_session(user_id)
+                workdir = session.active_project_path if session and session.active_project_path else "~/cellclaw_jobs"
+                
+                # Write to SSH
+                full_path = f"{workdir}/{plan_filename}"
+                cmd = f"echo '{plan_text}' > {full_path}"
+                await self._ssh_manager.run(user_id, cmd)
+                return full_path
+            except:
+                pass
+        
+        # Fallback - return local path
+        return f"~/cellclaw_jobs/{plan_filename}"
+
+    async def _save_script_to_ssh(self, user_id: str, code: str, language: str, task: str) -> str:
+        """Coder writes script directly to SSH workdir."""
+        import secrets
+        
+        ext = ".R" if language == "R" else ".py"
+        filename = f"job_{secrets.token_hex(4)}{ext}"
+        
+        if self._ssh_manager:
+            try:
+                session = self._ssh_manager._registry.get_session(user_id)
+                workdir = session.active_project_path if session and session.active_project_path else "~/cellclaw_jobs"
+                
+                full_path = f"{workdir}/{filename}"
+                
+                # Write script content to SSH via sftp or run command
+                escaped_code = code.replace("'", "'\''").replace("\n", "\\n")
+                cmd = f"cat > {full_path} << 'SCRIPT_EOF'\n{code}\nSCRIPT_EOF"
+                await self._ssh_manager.run(user_id, cmd)
+                
+                logger.info(f"Saved script to SSH: {full_path}")
+                return full_path
+            except Exception as e:
+                logger.error(f"Failed to save to SSH: {e}")
+        
+        return f"~/cellclaw_jobs/{filename}"
+
+    async def _notify_progress(self, title: str, detail: str):
+        """Notify progress to user via callback."""
+        if self._notify_callback:
+            self._notify_callback({
+                "type": "progress",
+                "title": title,
+                "detail": detail,
+                "message": f"📋 {title}\n{detail}"
+            })
 
     async def _handle_simple_analysis(self, intent, task: str, user_id: str) -> str:
         """Handle simple analysis - single step."""
