@@ -197,28 +197,54 @@ Respond with ONLY the category word, nothing else."""
 
     async def _llm_converse(self, message: str, user_id: str) -> str:
         """
-        LLM-based natural conversation (not a task).
+        LLM-based natural conversation with full context awareness.
         """
-        context = self.base.build_context_for_llm(user_id)
+        # Build rich context from user's environment
+        context_parts = []
         
-        system_prompt = """You are CellClaw, a professional and friendly bioinformatics analysis assistant.
+        # Servers
+        servers = self.base.get_all_servers(user_id)
+        if servers:
+            server_lines = []
+            for name, server in servers.items():
+                active = " (当前)" if name == self.base.get_active_server(user_id) else ""
+                host = getattr(server, 'host', 'unknown')
+                env = getattr(server, 'conda_env', None) or '未设置'
+                server_lines.append("  - " + name + active + ": " + host + ", conda环境: " + env)
+            context_parts.append("用户配置的服务器:\n" + "\n".join(server_lines))
+        else:
+            context_parts.append("用户尚未配置任何服务器")
+        
+        # Working directory
+        workdir = self.base.get_workdir(user_id)
+        if workdir:
+            context_parts.append("当前工作目录: " + workdir)
+        
+        # Active jobs
+        jobs = self.executor.get_active_jobs(user_id)
+        if jobs:
+            context_parts.append("运行中的任务数: " + str(len(jobs)))
+        
+        context = "\n\n".join(context_parts) if context_parts else "无"
+        
+        system_prompt = (
+            "You are CellClaw, a professional and friendly bioinformatics analysis assistant.\n\n"
+            "IMPORTANT: You have SSH access to the user's servers. You KNOW about their infrastructure.\n"
+            "Do NOT say \"I don't have access\" or \"I can't see\" - you CAN see these things.\n\n"
+            "Current user environment:\n" + context + "\n\n"
+            "Your personality:\n"
+            "- Professional and reliable\n"
+            "- Helpful and proactive\n"
+            "- Speak in the user's language (Chinese or English)\n"
+            "You can help with: single-cell analysis, differential expression, cell annotation, batch correction, visualization\n\n"
+            "You should:\n"
+            "- Answer questions about capabilities based on what you know about the user's setup\n"
+            "- Greet users warmly\n"
+            "- Be aware of their servers and environments when answering\n\n"
+            "Be conversational, helpful, and knowledgeable about the user's environment."
+        )
 
-Your personality:
-- Professional and reliable
-- Helpful and proactive
-- Speak in the user's language (Chinese or English)
-- You can help with: single-cell analysis (scRNA, snRNA), differential expression, cell annotation, batch correction, visualization
-
-You should:
-- Answer questions about your capabilities naturally
-- Greet users warmly
-- Thank users politely
-- Explain what you can do when asked
-- NOT generate code or submit tasks
-
-Be conversational and natural."""
-
-        user_prompt = f"User said: {message}\n\nContext: {context}"
+        user_prompt = "User said: " + message
         
         response = await self._call_llm(user_prompt, system=system_prompt)
         
@@ -226,6 +252,8 @@ Be conversational and natural."""
             return response
         
         # Fallback if LLM fails
+        return self._fallback_conversation(message)
+
         return self._fallback_conversation(message)
 
     def _fallback_conversation(self, message: str) -> str:

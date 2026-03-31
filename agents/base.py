@@ -94,6 +94,14 @@ class BaseAgent:
         if server_id:
             return ctx.servers.get(server_id)
         return ctx.get_active_server()
+
+    def get_all_servers(self, user_id: str) -> dict[str, ServerInfo]:
+        """Get all servers for a user"""
+        ctx = self.get_user_context(user_id)
+        if not ctx:
+            return {}
+        return ctx.servers.copy()
+
     
     # ───────────────────────────────────────────────────────────────
     # Working Directory
