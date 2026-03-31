@@ -526,17 +526,17 @@ class OrchestratorAgent:
         )
         
         return (
-            f"✅ 分析流程已完成
+            "分析流程已完成
 
 "
-            f"计划文件: {plan_path}
+            "计划文件: " + plan_path + "
 "
-            f"脚本位置: {script_path}
+            "脚本位置: " + script_path + "
 "
-            f"任务 ID: {job_id}
+            "任务 ID: " + job_id + "
 
 "
-            f"任务正在后台执行，完成后会通知你"
+            "任务正在后台执行，完成后会通知你"
         )
 
     async def _save_plan_to_workdir(self, user_id: str, plan_text: str, task: str) -> str:
