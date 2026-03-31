@@ -12,7 +12,7 @@ from typing import Optional
 from dataclasses import dataclass
 
 from agents.base import BaseAgent
-from agents.models import AgentConfig, AgentType, TaskStep, ExecutionPlan
+from agents.models import AgentConfig, AgentType, TaskStep, ExecutionPlan, Intent
 
 
 logger = logging.getLogger(__name__)
