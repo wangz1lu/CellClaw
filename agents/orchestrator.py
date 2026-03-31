@@ -411,30 +411,20 @@ class OrchestratorAgent:
         return "请告诉我要执行什么文件操作？"
 
     async def _handle_analyze(self, params: dict, user_id: str) -> str:
-        """Handle analysis request - submit job like original."""
-        analysis_type = params.get("analysis_type", "general")
+        """
+        Handle analysis request - use full multi-agent flow.
+        Routes to: Planner → Coder → Reviewer → Executor
+        """
         question = params.get("question", "")
         
-        # Build context for analysis
-        context = self._build_context(user_id)
+        logger.info(f"Analyze request: {question}")
         
-        prompt = f"""用户请求分析: {question}
-
-当前环境：
-{context}
-
-分析类型: {analysis_type}
-
-请先用Planner理解任务，创建计划，然后提交给Executor执行。
-这是一个分析任务，需要：
-1. 理解用户想要的分析
-2. 生成代码
-3. 提交执行"""
-
-        # Use planner to understand
+        # Use planner to understand task
         intent = await self.planner.understand(question, user_id)
         
-        # Route to simple or complex handler
+        logger.info(f"Planner intent: type={intent.intent_type}, simple={intent.is_simple_task}, skill={intent.skill_needed}")
+        
+        # Route to simple or complex multi-agent flow
         if intent.is_simple_task:
             return await self._handle_simple_analysis(intent, question, user_id)
         else:
