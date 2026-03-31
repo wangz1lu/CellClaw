@@ -253,30 +253,55 @@ print("Task: {task_description}")
             logger.info(f"Coder: Saved code to shared memory for skill {skill_id}")
     
     async def save_script(self, code: str, language: str, 
-                         filename: str = None) -> str:
+                         filename: str = None, user_id: str = None) -> str:
         """
-        Save generated code to a file.
+        Save generated code to workdir on remote server.
         
         Args:
             code: The code to save
             language: "R" or "Python"
             filename: Optional custom filename
+            user_id: User ID to get workdir from SSH manager
             
         Returns:
-            Path to saved script
+            Remote path to saved script on server
         """
         import time
+        import secrets
         
         if not filename:
+            prefix = secrets.token_hex(4)
             ext = ".R" if language == "R" else ".py"
-            filename = f"script_{int(time.time())}{ext}"
+            filename = f"cellclaw_{prefix}{ext}"
         
-        filepath = os.path.join(self._script_dir, filename)
+        # Try to get workdir from SSH manager
+        workdir = "~/cellclaw_jobs"
+        if user_id and self.shared_memory:
+            # Try to get from base's ssh_manager if available
+            pass
         
-        with open(filepath, "w") as f:
+        # Save locally first, then Executor will handle remote upload
+        local_path = os.path.join(self._script_dir, filename)
+        os.makedirs(self._script_dir, exist_ok=True)
+        
+        with open(local_path, "w") as f:
             f.write(code)
         
-        logger.info(f"Saved script to {filepath}")
+        logger.info(f"Saved script locally to {local_path}")
+        
+        # Return both local and suggested remote path
+        remote_path = f"{workdir}/{filename}"
+        
+        # Store the code content for Executor to use
+        self._last_script = {
+            "code": code,
+            "language": language,
+            "filename": filename,
+            "local_path": local_path,
+            "remote_path": remote_path
+        }
+        
+        return remote_path  # Return remote path
         
         return filepath
     
