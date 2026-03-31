@@ -158,6 +158,34 @@ class OrchestratorAgent:
 
     async def _llm_understand_intent(self, message: str) -> str:
         """
+        Use LLM to truly understand user intent.
+        
+        Returns:
+            "task": User wants to execute any operation (analysis, shell command, etc.)
+            "conversation": User is just chatting
+        """
+        prompt = (
+            "Classify this user message as 'task' or 'conversation':\n\n"
+            'User message: "' + message + '"\n\n'
+            'Examples of TASK: "帮我做分析", "新建文件夹", "创建test", "删除文件", "跑SCTransform"\n'
+            'Examples of CONVERSATION: "你好", "你会什么", "谢谢", "你是谁"\n\n'
+            'ANY action request (CREATE, DELETE, RUN, CHECK, VIEW, ANALYZE) -> task\n'
+            'ONLY greetings/thanks/casual chat -> conversation\n\n'
+            'Respond with ONLY "task" or "conversation"'
+        )
+        
+        response = await self._call_llm(prompt)
+        
+        if response:
+            response = response.strip().lower()
+            if response in ["task", "conversation"]:
+                logger.info(f"LLM intent: {response} for: {message[:30]}...")
+                return response
+        
+        # Fallback: use smarter keyword-based detection
+        logger.warning("LLM intent detection failed, using fallback")
+        return self._fallback_intent_detection(message)
+        """
         Use LLM to understand if user is:
         - "task": wants to execute a task
         - "conversation": just chatting
@@ -198,10 +226,22 @@ Respond with ONLY the category word, nothing else."""
         """
         msg_lower = message.lower()
         
-        # Task indicators
-        task_keywords = ["帮我", "做", "跑", "分析", "生成", "计算", "执行", "处理"]
+        # Task indicators - ANY action verb
+        task_keywords = [
+            # Chinese action verbs
+            "帮我", "帮我做", "帮我跑", "帮我执行",
+            "做", "跑", "执行", "分析", "计算", "处理",
+            "新建", "创建", "删除", "复制", "移动", "切换",
+            "查看", "显示", "展示", "打开", "读取", "写入",
+            # English action verbs
+            "mkdir", "create", "delete", "remove", "copy", "move", "cd",
+            "run", "execute", "check", "show", "display", "list",
+            "analyze", "generate", "process", "start", "stop"
+        ]
+        
         for kw in task_keywords:
             if kw in msg_lower:
+                logger.info(f"Fallback detected task: matched '{kw}'")
                 return "task"
         
         # Default to conversation
