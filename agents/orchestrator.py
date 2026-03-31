@@ -526,16 +526,10 @@ class OrchestratorAgent:
         )
         
         return (
-            "分析流程已完成
-
-"
-            "计划文件: " + plan_path + "
-"
-            "脚本位置: " + script_path + "
-"
-            "任务 ID: " + job_id + "
-
-"
+            "分析流程已完成\n\n"
+            "计划文件: " + plan_path + "\n"
+            "脚本位置: " + script_path + "\n"
+            "任务 ID: " + job_id + "\n\n"
             "任务正在后台执行，完成后会通知你"
         )
 
