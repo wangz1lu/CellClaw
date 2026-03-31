@@ -2,14 +2,16 @@
 OrchestratorAgent - Main Coordinator
 ====================================
 
-Redesigned to match original single-agent behavior:
-- Conversation mode: LLM chat with full context (knows who it is)
-- Task mode: Route to appropriate handler like original NL Router
+LLM classifies intent into handlers:
+- conversation: Direct chat
+- status: Return status
+- help: Return help
+- query: Return information
+- file_operation: SSH file operations
+- easy_task: Direct execution via SSH (downloads, simple commands)
+- analyze: Multi-agent flow (Planner→Coder→Reviewer→Executor)
 
-Flow:
-用户消息 → classify_intent() → task/conversation
-    ├── task → route_task() → specific handler
-    └── conversation → llm_chat() → LLM with identity
+For analyze, user is asked to confirm before execution.
 """
 
 from __future__ import annotations
@@ -18,14 +20,11 @@ import re
 import logging
 import asyncio
 from typing import Optional, Callable
-from dataclasses import dataclass
-import secrets
 
 from agents.base import BaseAgent
-from agents.memory import SharedMemory, TaskMemory, get_shared_memory
+from agents.memory import SharedMemory, get_shared_memory
 from agents.models import (
-    AgentConfig, AgentType, UserContext, 
-    TaskStep, ExecutionPlan, PlanStatus, TaskStatus, Intent
+    AgentConfig, AgentType, TaskStep, ExecutionPlan, TaskStatus, Intent
 )
 
 logger = logging.getLogger(__name__)
@@ -35,11 +34,14 @@ class OrchestratorAgent:
     """
     OrchestratorAgent - Single interface for user communication.
     
-    Mimics original single-agent behavior:
-    - Can chat naturally (conversation mode)
-    - Can execute tasks (task mode) like the original NL Router
-    
-    Executor Agent reports back independently via callbacks.
+    LLM decides which handler to use:
+    - conversation: Greetings, casual chat
+    - status: Current server/workdir/conda/env/jobs
+    - help: How to use
+    - query: Questions about data/info
+    - file_operation: SSH file operations (mkdir, rm, ls)
+    - easy_task: Simple tasks executed directly (download, curl, wget)
+    - analyze: Complex tasks via multi-agent (analysis, QC, etc.)
     """
 
     def __init__(self, config: AgentConfig = None):
@@ -54,35 +56,30 @@ class OrchestratorAgent:
         # Initialize base agent
         self.base = BaseAgent()
 
-        # Internal agents for task execution
+        # Internal agents for complex tasks
         from agents.planner import PlannerAgent
         from agents.coder import CoderAgent
         from agents.reviewer import ReviewerAgent
-        
-        # Shared memory
+        from agents.executor import ExecutorAgent
+
         self.shared_memory = get_shared_memory()
-        
-        # All agents get ssh_manager for real context
         self.planner = PlannerAgent(shared_memory=self.shared_memory, ssh_manager=None)
         self.coder = CoderAgent(shared_memory=self.shared_memory, ssh_manager=None)
         self.reviewer = ReviewerAgent(shared_memory=self.shared_memory, ssh_manager=None)
-
-        # Executor for job submission
-        from agents.executor import ExecutorAgent
         self.executor = ExecutorAgent()
         self.executor.set_notify_callback(self.on_executor_event)
-        
+
         # User notification callback
         self._notify_callback: Optional[Callable] = None
-        
-        # Real data sources (injected later)
+
+        # Real data sources
         self._ssh_manager = None
         self._job_tracker = None
-        
-        # Active plans
-        self._plans: dict[str, ExecutionPlan] = {}
 
-        logger.info(f"OrchestratorAgent initialized (single-agent compatible)")
+        # Pending task for confirmation
+        self._pending_task: dict = {}
+
+        logger.info(f"OrchestratorAgent initialized")
 
     def set_notify_callback(self, callback: Callable):
         """Set callback for user notifications"""
@@ -90,9 +87,8 @@ class OrchestratorAgent:
         self.executor.set_user_notify_callback(callback)
 
     def set_ssh_manager(self, ssh_manager):
-        """Set SSH manager for real server data - propagates to all agents"""
+        """Set SSH manager and propagate to agents"""
         self._ssh_manager = ssh_manager
-        # Propagate to all internal agents
         if hasattr(self, 'planner'):
             self.planner.base._ssh_manager = ssh_manager
         if hasattr(self, 'coder'):
@@ -101,10 +97,6 @@ class OrchestratorAgent:
             self.reviewer.base._ssh_manager = ssh_manager
         logger.info("SSH manager propagated to all agents")
 
-    def set_job_tracker(self, job_tracker):
-        """Set job tracker for real job data"""
-        self._job_tracker = job_tracker
-
     # ───────────────────────────────────────────────────────────────
     # LLM Integration
     # ───────────────────────────────────────────────────────────────
@@ -112,23 +104,23 @@ class OrchestratorAgent:
     async def _call_llm(self, prompt: str, system: str = None) -> str:
         """Call LLM API."""
         import aiohttp
-        
+
         messages = []
         if system:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
-        
+
         payload = {
             "model": self._model,
             "messages": messages,
-            "temperature": 0.7,
+            "temperature": 0.3,
         }
-        
+
         headers = {
             "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json"
         }
-        
+
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(
@@ -141,7 +133,7 @@ class OrchestratorAgent:
                         error = await resp.text()
                         logger.error(f"LLM API error: {resp.status} - {error}")
                         return None
-                    
+
                     result = await resp.json()
                     return result["choices"][0]["message"]["content"]
         except Exception as e:
@@ -155,423 +147,371 @@ class OrchestratorAgent:
     def _build_context(self, user_id: str) -> str:
         """Build context from real data sources."""
         parts = []
-        
+
         if self._ssh_manager and hasattr(self._ssh_manager, '_registry'):
             try:
-                # Servers
                 servers = self._ssh_manager._registry.list_servers(user_id)
                 if servers:
-                    server_lines = []
-                    for cfg in servers:
-                        server_lines.append(f"  - {cfg.server_id}: {cfg.username}@{cfg.host}:{cfg.port}")
-                    parts.append("用户配置的服务器:\n" + "\n".join(server_lines))
-                
-                # Session info
+                    parts.append(f"服务器: {len(servers)} 台已配置")
+
                 session = self._ssh_manager._registry.get_session(user_id)
                 if session:
-                    if session.active_project_path:
-                        parts.append("当前工作目录: " + session.active_project_path)
-                    if session.active_conda_env:
-                        parts.append("当前conda环境: " + session.active_conda_env)
                     if session.active_server_id:
-                        parts.append("当前服务器: " + session.active_server_id)
-            except Exception as e:
-                logger.warning(f"Failed to get SSH context: {e}")
-        
-        # Active jobs
+                        parts.append(f"当前服务器: {session.active_server_id}")
+                    if session.active_project_path:
+                        parts.append(f"当前工作目录: {session.active_project_path}")
+                    if session.active_conda_env:
+                        parts.append(f"Conda环境: {session.active_conda_env}")
+            except:
+                pass
+
         try:
             jobs = self.executor.get_active_jobs(user_id)
             if jobs:
-                parts.append("运行中的任务: " + str(len(jobs)))
+                parts.append(f"运行中任务: {len(jobs)}")
         except:
             pass
-        
-        return "\n\n".join(parts) if parts else "无"
 
-    # ───────────────────────────────────────────────────────────────
-    # Intent Classification
-    # ───────────────────────────────────────────────────────────────
-
-    def _classify_intent(self, message: str, user_id: str) -> dict:
-        """
-        Classify user intent like original single-agent NL Router.
-        """
-        msg = message.strip()
-        msg_lower = msg.lower()
-        
-        # ── Status / session queries ───────────────────────────────────
-        if any(kw in msg_lower for kw in ["我的状态", "当前状态", "/status", "session", "状态"]):
-            return {"action": "status", "params": {}, "raw": msg}
-        
-        # ── Help ──────────────────────────────────────────────────────
-        if any(kw in msg_lower for kw in ["怎么用", "help", "帮助", "有什么功能", "你会什么"]):
-            return {"action": "help", "params": {}, "raw": msg}
-        
-        # ── File/script operations ────────────────────────────────────
-        if any(kw in msg_lower for kw in ["读一下", "看一下", "解释", "查看脚本", "看看这个脚本"]):
-            return {"action": "read_script", "params": {"path": None}, "raw": msg}
-        
-        # ── Modify script ─────────────────────────────────────────────
-        if any(kw in msg_lower for kw in ["修改", "优化", "加上", "加一个", "添加", "改成"]):
-            return {"action": "modify_script", "params": {"instruction": msg}, "raw": msg}
-        
-        # ── Create folder / file operations ────────────────────────────
-        if any(kw in msg_lower for kw in ["新建", "创建", "mkdir", "删除", "移动", "复制"]):
-            return {"action": "file_operation", "params": {"operation": msg}, "raw": msg}
-        
-        # ── Query / check info ─────────────────────────────────────────
-        if any(kw in msg_lower for kw in ["多少", "几个", "有没有", "是什么", "平均", "最多", "最少", "查看", "看看", "告诉我", "查一下", "目前", "当前", "我们"]):
-            # Must be about directory/path/workdir to be query
-            if any(k in msg_lower for k in ["目录", "路径", "工作", "项目", "folder", "path"]):
-                return {"action": "query", "params": {"question": msg}, "raw": msg}
-        
-        # ── Analysis tasks ─────────────────────────────────────────────
-        analysis_type = self._detect_analysis_type(msg_lower)
-        if analysis_type:
-            return {
-                "action": "analyze",
-                "params": {
-                    "analysis_type": analysis_type,
-                    "question": msg,
-                },
-                "raw": msg
-            }
-        
-        # ── Full pipeline ─────────────────────────────────────────────
-        if any(kw in msg_lower for kw in ["完整", "全流程", "从头", "全套", "完整分析", "从0开始", "从零开始"]):
-            return {"action": "full_pipeline", "params": {"question": msg}, "raw": msg}
-        
-        # ── Conversational / casual ────────────────────────────────────
-        if any(kw in msg_lower for kw in ["你好", "hi", "hello", "嗨", "在吗", "谢谢", "再见", "拜拜", "你是谁"]):
-            return {"action": "conversation", "params": {}, "raw": msg}
-        
-        # ── Default: LLM chat ─────────────────────────────────────────
-        return {"action": "llm_chat", "params": {"message": msg}, "raw": msg}
-
-    def _detect_analysis_type(self, msg_lower: str) -> Optional[str]:
-        """Detect analysis type from message."""
-        if any(k in msg_lower for k in ["qc", "质控", "过滤", "quality"]):
-            return "qc"
-        if any(k in msg_lower for k in ["cluster", "聚类", "umap", "tsne", "降维"]):
-            return "cluster"
-        if any(k in msg_lower for k in ["注释", "annotate", "cell type", "细胞类型", "celltype"]):
-            return "annotate"
-        if any(k in msg_lower for k in ["差异", "deg", "differential", "marker gene", "marker"]):
-            return "deg"
-        if any(k in msg_lower for k in ["轨迹", "trajectory", "pseudotime"]):
-            return "trajectory"
-        if any(k in msg_lower for k in ["批次", "batch", "integration", "整合", "harmony"]):
-            return "batch_integration"
-        if any(k in msg_lower for k in ["可视化", "画图", "plot", "visualization", "chart"]):
-            return "visualization"
-        if any(k in msg_lower for k in ["sce", "seurat", "scanpy", "单细胞", "scrna", "snrna"]):
-            return "single_cell"
-        if any(k in msg_lower for k in ["下载", "download", "获取数据", "抓取"]):
-            return "download"
-        return None
+        return "\n".join(parts) if parts else "无配置信息"
 
     # ───────────────────────────────────────────────────────────────
     # Main Processing
     # ───────────────────────────────────────────────────────────────
 
     async def process(self, message: str, user_id: str, channel_id: str = None) -> str:
-        """
-        Main entry point - matches original single-agent flow.
-        """
+        """Main entry point - LLM classifies and routes to handlers."""
         logger.info(f"Orchestrator: '{message[:50]}...' user={user_id}")
 
-        # Add to history
         self.base.add_to_history(user_id, "user", message)
 
-        # Classify intent
-        intent = self._classify_intent(message, user_id)
-        logger.info(f"Action: {intent['action']}")
+        # Check if user confirmed a pending task
+        if self._pending_task.get(user_id):
+            if any(k in message.lower() for k in ["是", "好的", "确认", "继续", "yes", "go", "do"]):
+                pending = self._pending_task.pop(user_id, None)
+                if pending:
+                    return await self._execute_analyze(pending, user_id)
 
-        # LLM decides what to do - use context to be smart
-        response = await self._llm_chat(message, user_id)
+            # User didn't confirm, clear pending
+            self._pending_task.pop(user_id, None)
+
+        # LLM classifies intent
+        intent = await self._classify_intent(message, user_id)
+        logger.info(f"Intent: {intent}")
+
+        handler = intent.get("handler")
+        params = intent.get("params", {})
+
+        # Route to appropriate handler
+        if handler == "conversation":
+            response = await self._handle_conversation(message, user_id)
+        elif handler == "status":
+            response = await self._handle_status(user_id)
+        elif handler == "help":
+            response = await self._handle_help(user_id)
+        elif handler == "query":
+            response = await self._handle_query(params, user_id)
+        elif handler == "file_operation":
+            response = await self._handle_file_operation(params, user_id)
+        elif handler == "easy_task":
+            response = await self._handle_easy_task(params, user_id)
+        elif handler == "analyze":
+            response = await self._handle_analyze_intent(message, params, user_id)
+        else:
+            response = await self._handle_conversation(message, user_id)
 
         self.base.add_to_history(user_id, "assistant", response)
         return response
 
+    async def _classify_intent(self, message: str, user_id: str) -> dict:
+        """
+        LLM classifies user message into handler type.
+        """
+        context = self._build_context(user_id)
+
+        prompt = (
+            "分析用户消息，选择正确的处理器：\n\n"
+            "处理器选项：\n"
+            "- conversation: 问好、谢谢、再见、闲聊\n"
+            "- status: 问当前状态（服务器/工作目录/conda/任务数）\n"
+            "- help: 问怎么用、有什么功能\n"
+            "- query: 问信息问题（多少/是什么/查看）\n"
+            "- file_operation: 文件操作（新建/删除/查看文件夹）\n"
+            "- easy_task: 简单任务直接执行（下载文件/运行简单命令）\n"
+            "- analyze: 复杂任务（分析/处理/计算）需要多步骤\n\n"
+            "判断：\n"
+            "- '你好/谢谢/你是谁' -> conversation\n"
+            "- '当前状态/有几台服务器' -> status\n"
+            "- '怎么用/help' -> help\n"
+            "- '是什么/有多少/查看' -> query\n"
+            "- '新建文件夹/删除/ls' -> file_operation\n"
+            "- '帮我下载/curl/wget/运行命令' -> easy_task\n"
+            "- '帮我做分析/跑流程/处理数据/差异分析' -> analyze\n\n"
+            "用户消息: " + message + "\n\n"
+            "返回格式：handler=xxx, params=xxx\n"
+            "只返回一个选项。"
+        )
+
+        response = await self._call_llm(prompt)
+
+        if not response:
+            return {"handler": "conversation", "params": {}}
+
+        response = response.lower()
+
+        # Parse response
+        if "conversation" in response:
+            return {"handler": "conversation", "params": {"message": message}}
+        elif "status" in response:
+            return {"handler": "status", "params": {}}
+        elif "help" in response:
+            return {"handler": "help", "params": {}}
+        elif "query" in response:
+            return {"handler": "query", "params": {"question": message}}
+        elif "file_operation" in response:
+            return {"handler": "file_operation", "params": {"operation": message}}
+        elif "easy_task" in response:
+            return {"handler": "easy_task", "params": {"task": message}}
+        elif "analyze" in response:
+            return {"handler": "analyze", "params": {"task": message}}
+        else:
+            return {"handler": "conversation", "params": {"message": message}}
+
     # ───────────────────────────────────────────────────────────────
-    # Handlers - REAL execution via SSH
+    # Handlers
     # ───────────────────────────────────────────────────────────────
 
+    async def _handle_conversation(self, message: str, user_id: str) -> str:
+        """Handle casual conversation."""
+        msg_lower = message.lower()
+
+        if any(g in msg_lower for g in ["你好", "hi", "hello", "嗨", "在吗"]):
+            return "你好！我是 CellClaw，你的生物信息分析助手。有什么可以帮你的？"
+        if "谢谢" in msg_lower:
+            return "不客气！有问题随时问我。"
+        if "再见" in msg_lower or "拜拜" in msg_lower:
+            return "再见！"
+        if "你是谁" in msg_lower:
+            return "我是 CellClaw，一个专注于生物信息学分析的 AI 助手。"
+
+        # Use LLM for other conversation
+        prompt = "用户: " + message + " 请简洁回应。"
+        response = await self._call_llm(prompt)
+        return response if response else "我明白了。"
+
     async def _handle_status(self, user_id: str) -> str:
-        """Handle status query - REAL status via SSH Manager."""
+        """Return real status from SSH registry."""
         if not self._ssh_manager:
             return "未连接到服务器"
+
         return self._ssh_manager.get_session_summary(user_id)
 
     async def _handle_help(self, user_id: str) -> str:
-        """Handle help request - returns actual command help."""
-        if hasattr(self, '_ssh_manager') and self._ssh_manager and hasattr(self._ssh_manager, '_dispatcher'):
-            return self._ssh_manager._dispatcher._global_help()
-        
-        # Fallback help
+        """Return help text."""
         return """CellClaw 使用指南
 
-【分析命令】
-- 帮我做差异分析 → 提交差异分析任务
-- 帮我做QC → 提交质量控制任务
-- 帮我跑SCTransform → 提交SCTransform分析
-- 完整分析 → 从头到尾完整流程
+【状态查询】
+- 当前服务器/工作目录/conda环境
 
 【文件操作】
-- 新建文件夹xxx → 在当前目录创建文件夹
-- 查看当前目录 → 显示目录内容
-- 切换到xxx目录 → 切换工作目录
+- 新建文件夹xxx
+- 删除xxx
+- 查看目录内容
 
-【系统命令】
-- /server add → 添加服务器
-- /server use xxx → 切换服务器
-- /env list → 查看conda环境
-- /env use xxx → 切换conda环境
-- /status → 查看当前状态
+【简单任务】
+- 帮我下载文件
+- 运行xxx命令
 
-直接用自然语言描述你想做的事就行！"""
+【复杂分析任务】
+- 帮我做差异分析
+- 帮我跑SCTransform
+- 帮我做细胞注释
+
+直接告诉我你想做什么！"""
 
     async def _handle_query(self, params: dict, user_id: str) -> str:
-        """
-        Handle data query - NEVER fabricate critical info.
-        Only return REAL data from SSH registry. If unknown, say so.
-        """
-        if not self._ssh_manager:
-            return "抱歉，未连接到服务器。请先配置服务器。"
-        
+        """Handle information queries - return real data."""
         question = params.get("question", "")
         msg_lower = question.lower()
-        
-        # Get session context
-        try:
-            session = self._ssh_manager._registry.get_session(user_id)
-            workdir = session.active_project_path if session and session.active_project_path else "~"
-            conda_env = session.active_conda_env if session else None
-        except:
-            workdir = "~"
-            conda_env = None
-        
-        # File count query
+
+        if not self._ssh_manager:
+            return "未连接到服务器"
+
+        # Get real data
+        session = self._ssh_manager._registry.get_session(user_id)
+        workdir = session.active_project_path if session and session.active_project_path else None
+
+        # File count
         if any(k in msg_lower for k in ["多少", "几个"]) and "文件" in msg_lower:
-            cmd = "find " + workdir + " -type f 2>/dev/null | wc -l"
+            cmd = f"find {workdir or '.'} -type f 2>/dev/null | wc -l"
             result = await self._ssh_manager.run(user_id, cmd)
             if result and result.success:
-                return "当前目录共有 " + result.stdout.strip() + " 个文件"
-        
+                return f"当前目录共有 {result.stdout.strip()} 个文件"
+
         # List directory
         if any(k in msg_lower for k in ["有什么", "列出", "查看", "ls"]):
-            target = self._extract_path(question, workdir)
-            cmd = "ls -lah " + target
+            target = workdir or "."
+            cmd = f"ls -lah {target}"
             result = await self._ssh_manager.run(user_id, cmd)
             if result and result.success:
-                return "目录 " + target + " 内容:\n" + result.stdout
-            return "无法查看目录"
-        
-        # Conda environments
+                return f"目录 {target} 内容:\n{result.stdout}"
+
+        # Conda envs
         if "conda" in msg_lower or "环境" in msg_lower:
             cmd = "conda env list 2>/dev/null || echo 'conda not found'"
             result = await self._ssh_manager.run(user_id, cmd)
             if result and result.success:
-                return "Conda 环境:\n" + result.stdout
-        
-        # Current directory - MUST get REAL workdir from registry
-        if ("当前" in msg_lower or "目前" in msg_lower) and ("目录" in msg_lower or "路径" in msg_lower or "项目" in msg_lower or "工作" in msg_lower):
-            if self._ssh_manager:
-                try:
-                    session = self._ssh_manager._registry.get_session(user_id)
-                    real_workdir = session.active_project_path if session else None
-                    if real_workdir:
-                        return "当前工作目录: " + real_workdir
-                except:
-                    pass
-            # NEVER fabricate - if we don't know, say so
-            return "暂未设置工作目录，请先用 /project set <路径> 设置"
+                return f"Conda环境:\n{result.stdout}"
 
-        # Default: NEVER fabricate, use LLM only for non-critical info
-        return await self._llm_query(question, require_real_data=False)
-        
-        # Jobs status
-        if "任务" in msg_lower or "job" in msg_lower:
-            jobs = self.executor.get_active_jobs(user_id)
-            if jobs:
-                lines = ["运行中的任务 (" + str(len(jobs)) + "):"]
-                for j in jobs:
-                    lines.append("- " + j.description + ": " + j.status)
-                return "\n".join(lines)
-            return "当前没有运行中的任务"
-        
-        # Fallback to LLM
-        return await self._llm_query(question)
-
-    def _extract_path(self, text: str, default: str) -> str:
-        """Extract path from text."""
-        patterns = [r'[/~][^\s]+', r'到\s*([^\s]+)', r'目录\s*([^\s]+)']
-        for p in patterns:
-            m = re.search(p, text)
-            if m:
-                return m.group(1)
-        return default
-
-    async def _llm_query(self, question: str, require_real_data: bool = True) -> str:
-        """
-        Use LLM to answer query - but NEVER fabricate critical server info.
-        """
-        msg_lower = question.lower()
-        
-        # Check if asking about CRITICAL info (server/workdir/conda)
-        critical_keywords = ["目录", "路径", "工作", "项目", "服务器", "conda", "环境", "server"]
-        if require_real_data and any(k in msg_lower for k in critical_keywords):
-            # This is critical info - we should have it or say we don't
-            if self._ssh_manager:
-                try:
-                    session = self._ssh_manager._registry.get_session(user_id)
-                    if session:
-                        parts = []
-                        if session.active_project_path:
-                            parts.append("工作目录: " + session.active_project_path)
-                        if session.active_server_id:
-                            parts.append("服务器: " + session.active_server_id)
-                        if session.active_conda_env:
-                            parts.append("Conda环境: " + session.active_conda_env)
-                        if parts:
-                            return "\n".join(parts)
-                except:
-                    pass
-            return "抱歉，我无法获取该信息。请确认已连接服务器并设置工作目录。"
-        
-        # Non-critical info - can use LLM
-        context = self._build_context("user")
-        prompt = "用户问: " + question + "\n\n当前用户环境:\n" + context + "\n\n请直接简洁回答用户问题。"
-        response = await self._call_llm(prompt, system="你是生物信息分析助手，直接简洁回答用户问题。")
-        return response if response else "抱歉，我无法回答这个问题。"
-
-    async def _handle_read_script(self, params: dict, user_id: str) -> str:
-        """Handle read script request."""
-        return "请告诉我脚本的完整路径，我帮你读取。"
-
-    async def _handle_modify_script(self, params: dict, user_id: str) -> str:
-        """Handle modify script request."""
-        return "请告诉我脚本的完整路径和要修改的内容。"
+        # Default - return context
+        context = self._build_context(user_id)
+        return f"当前信息:\n{context}"
 
     async def _handle_file_operation(self, params: dict, user_id: str) -> str:
-        """Handle file operations - REAL execution via SSH."""
+        """Handle file operations via SSH."""
         if not self._ssh_manager:
-            return "抱歉，未连接到服务器。请先配置服务器。"
-        
+            return "未连接到服务器"
+
         operation = params.get("operation", "")
         msg_lower = operation.lower()
-        
-        # Get workdir
-        try:
-            session = self._ssh_manager._registry.get_session(user_id)
-            workdir = session.active_project_path if session and session.active_project_path else "~/"
-        except:
-            workdir = "~/"
-        
+
+        session = self._ssh_manager._registry.get_session(user_id)
+        workdir = session.active_project_path if session and session.active_project_path else "~"
+
         # mkdir
         if "新建" in operation or "创建" in operation or "mkdir" in msg_lower:
-            folder_name = self._extract_folder_name(operation)
-            target_path = workdir + "/" + folder_name
-            cmd = "mkdir -p " + target_path
+            folder = self._extract_folder_name(operation)
+            target = f"{workdir}/{folder}"
+            cmd = f"mkdir -p {target}"
             result = await self._ssh_manager.run(user_id, cmd)
             if result and result.success:
-                return "已创建文件夹: " + target_path
-            return "创建失败: " + (result.stderr if result else "未知错误")
-        
+                return f"已创建文件夹: {target}"
+            return f"创建失败: {result.stderr if result else '未知错误'}"
+
         # rm
-        if "删除" in operation or "rm" in msg_lower:
+        if "删除" in operation:
             target = self._extract_target(operation, workdir)
-            cmd = "rm -rf " + target
+            cmd = f"rm -rf {target}"
             result = await self._ssh_manager.run(user_id, cmd)
             if result and result.success:
-                return "已删除: " + target
-            return "删除失败: " + (result.stderr if result else "未知错误")
-        
+                return f"已删除: {target}"
+            return f"删除失败: {result.stderr if result else '未知错误'}"
+
         # ls
-        if "查看" in operation or "ls" in msg_lower or "列出" in operation:
+        if "查看" in operation or "ls" in msg_lower:
             target = self._extract_target(operation, workdir)
-            cmd = "ls -lah " + target
+            cmd = f"ls -lah {target}"
             result = await self._ssh_manager.run(user_id, cmd)
             if result and result.success:
-                return "目录内容 (" + target + "):\n" + result.stdout
-            return "查看失败: " + (result.stderr if result else "未知错误")
-        
-        # cd / workdir
-        if "切换" in operation or "cd " in msg_lower:
-            new_workdir = self._extract_target(operation, workdir)
-            try:
-                self._ssh_manager._registry.set_workdir(user_id, new_workdir)
-                return "已切换到目录: " + new_workdir
-            except Exception as e:
-                return "切换失败: " + str(e)
-        
-        return "支持的操作: 新建文件夹, 删除, 查看目录, 切换目录"
+                return f"目录内容:\n{result.stdout}"
+            return f"查看失败: {result.stderr if result else '未知错误'}"
 
-    def _extract_folder_name(self, operation: str) -> str:
-        """Extract folder name."""
-        patterns = [r'[的新建创建]*文件夹 ?([^\s]+)', r'[的新建创建]* ?([^\s]+) ?文件夹', r'mkdir\s+([^\s]+)']
-        for pattern in patterns:
-            match = re.search(pattern, operation)
-            if match:
-                return match.group(1).strip()
-        return "untitled"
+        return "支持: 新建文件夹, 删除, 查看目录"
 
-    def _extract_target(self, operation: str, default: str) -> str:
-        """Extract target path."""
-        patterns = [r'[/~][^\s]+', r'到(.+?)(?:$|\s)', r'目录\s*([^\s]+)']
-        for p in patterns:
-            m = re.search(p, operation)
-            if m:
-                return m.group(1).strip()
-        return default
+    async def _handle_easy_task(self, params: dict, user_id: str) -> str:
+        """Handle simple tasks directly - no multi-agent needed."""
+        if not self._ssh_manager:
+            return "未连接到服务器"
 
-    async def _handle_analyze(self, params: dict, user_id: str) -> str:
+        task = params.get("task", "")
+        msg_lower = task.lower()
+
+        session = self._ssh_manager._registry.get_session(user_id)
+        workdir = session.active_project_path if session and session.active_project_path else "~"
+
+        # Download task
+        if "下载" in task or "wget" in msg_lower or "curl" in msg_lower:
+            # Extract URL
+            url_match = re.search(r'https?://[^\s]+', task)
+            if url_match:
+                url = url_match.group(0)
+                filename = url.split("/")[-1] or "download"
+                cmd = f"cd {workdir} && wget -O {filename} '{url}'"
+                result = await self._ssh_manager.run(user_id, cmd, timeout=300)
+                if result and result.success:
+                    return f"下载完成: {workdir}/{filename}\n{result.stdout[-200:] if result.stdout else ''}"
+                return f"下载失败: {result.stderr if result else '未知错误'}"
+            return "请提供下载链接"
+
+        # Default - run command
+        return "该任务较复杂，建议使用 analyze 流程"
+
+    async def _handle_analyze_intent(self, message: str, params: dict, user_id: str) -> str:
         """
-        Handle analysis - FULL multi-agent flow.
+        Handle complex analysis tasks - ask for confirmation first.
+        User must confirm before multi-agent flow begins.
         """
-        question = params.get("question", "")
-        intent = await self.planner.understand(question, user_id)
-        
+        task = params.get("task", message)
+
+        # Store pending task and ask for confirmation
+        self._pending_task[user_id] = params
+
+        return (
+            f"分析任务: {task}\n\n"
+            f"此为复杂任务，将启动多Agent协作模式：\n"
+            f"1. Planner 理解任务并制定计划\n"
+            f"2. Coder 生成代码\n"
+            f"3. Reviewer 检查代码\n"
+            f"4. Executor 提交执行\n\n"
+            f"任务将在后台执行，完成后通知你。\n\n"
+            f"是否继续？(是/好的/继续)"
+        )
+
+    async def _execute_analyze(self, params: dict, user_id: str) -> str:
+        """Execute the multi-agent analysis flow."""
+        task = params.get("task", "")
+
+        # Use planner to understand
+        intent = await self.planner.understand(task, user_id)
+
         if intent.is_simple_task:
-            return await self._handle_simple_analysis(intent, question, user_id)
+            return await self._handle_simple_analysis(intent, task, user_id)
         else:
-            return await self._handle_complex_analysis(intent, question, user_id)
+            return await self._handle_complex_analysis(intent, task, user_id)
 
-    async def _handle_simple_analysis(self, intent, question: str, user_id: str) -> str:
+    async def _handle_simple_analysis(self, intent, task: str, user_id: str) -> str:
         """Handle simple analysis - single step."""
         code_result = await self.coder.generate(
-            task_description=question,
+            task_description=task,
             skill_id=intent.skill_needed,
             language="R"
         )
+
         review_result = await self.reviewer.check(code_result.code, code_result.language)
         if not review_result.can_execute:
             issues = "\n".join([f"- [{i.severity}] {i.category}: {i.message}" for i in review_result.issues])
-            return "代码审查未通过:\n" + issues
+            return f"代码审查未通过:\n{issues}"
+
         script_path = await self.coder.save_script(code_result.code, code_result.language)
         job_id = await self.executor.submit(
             script_path=script_path,
             user_id=user_id,
             channel_id=None,
-            description=question,
+            description=task,
             skill_used=intent.skill_needed
         )
-        skill_info = "使用技能: " + intent.skill_needed if intent.skill_needed else ""
-        return "已提交分析任务\n" + skill_info + "\n任务ID: " + job_id + "\n描述: " + question + "\n执行完成后会通知你"
 
-    async def _handle_complex_analysis(self, intent, question: str, user_id: str) -> str:
+        return (
+            f"任务已提交\n"
+            f"任务ID: {job_id}\n"
+            f"描述: {task}\n"
+            f"执行完成后会通知你"
+        )
+
+    async def _handle_complex_analysis(self, intent, task: str, user_id: str) -> str:
         """Handle complex analysis - multiple steps."""
-        plan = self.planner.create_plan(question, intent, user_id)
-        self._plans[plan.plan_id] = plan
+        plan = self.planner.create_plan(task, intent, user_id)
+
         for i, step in enumerate(plan.steps):
             code_result = await self.coder.generate(
                 task_description=step.description,
                 skill_id=step.skill_id or intent.skill_needed,
                 language="R"
             )
+
             review_result = await self.reviewer.check(code_result.code, code_result.language)
             if not review_result.can_execute:
                 code_result.code = await self.reviewer.fix(code_result.code, review_result.issues)
+
             script_path = await self.coder.save_script(code_result.code, code_result.language)
             await self.executor.submit(
                 script_path=script_path,
@@ -580,96 +520,34 @@ class OrchestratorAgent:
                 description=step.description,
                 skill_used=step.skill_id
             )
+
             step.status = TaskStatus.RUNNING
-        return "已提交复杂分析任务\n步骤数: " + str(len(plan.steps)) + "\n技能: " + (intent.skill_needed or "通用") + "\n执行完成后会通知你"
 
-    async def _handle_full_pipeline(self, params: dict, user_id: str) -> str:
-        """Handle full pipeline."""
-        return "完整分析流程正在开发中..."
-
-    # ───────────────────────────────────────────────────────────────
-    # LLM Chat - knows identity
-    # ───────────────────────────────────────────────────────────────
-
-    async def _llm_chat(self, message: str, user_id: str) -> str:
-        """
-        LLM chat - decides whether to execute task or just talk.
-        When user confirms a task, it actually executes it.
-        """
-        msg_lower = message.lower()
-        
-        # Simple greetings - direct response
-        if any(g in msg_lower for g in ["你好", "hi", "hello", "嗨", "在吗"]):
-            return "你好！我是 CellClaw，你的生物信息分析助手。有什么可以帮你的？"
-        if "谢谢" in msg_lower:
-            return "不客气！有问题随时问我。"
-        if "再见" in msg_lower or "拜拜" in msg_lower:
-            return "再见！"
-        if "你是谁" in msg_lower or "who are you" in msg_lower:
-            return "我是 CellClaw，一个专注于生物信息学分析的 AI 助手。我可以帮你做单细胞分析、数据下载、脚本编写等。"
-        
-        # If asking about environment info - return REAL context directly
-        if any(k in msg_lower for k in ["环境", "信息", "状态", "当前", "情况"]):
-            context = self._build_context(user_id)
-            if context and context != "无":
-                return "当前环境信息：\n" + context
-            return "暂无环境信息。请先配置服务器和工作目录。"
-        
-        # Let LLM decide if this is a task or question
-        return await self._execute_task_from_message(user_id, message)
-        
-        # Default - use LLM to respond
-        prompt = ("用户: " + message + "  请简洁回应用户。")
-        response = await self._call_llm(prompt)
-        if response:
-            return response
-        
-        return "我明白了。请问要帮你做什么？"
-
-    async def _execute_task_from_message(self, user_id: str, message: str) -> str:
-        """
-        Use LLM to decide if this is a task to execute or a question to answer.
-        """
-        context = self._build_context(user_id)
-        
-        prompt = (
-            "用户消息: " + message + "\n\n"
-            "当前环境: " + context + "\n\n"
-            "判断用户意图：\n"
-            "1. 如果用户要执行某个操作/任务（下载/分析/生成/创建/执行）-> 返回 'TASK: 具体任务描述'\n"
-            "2. 如果用户只是在问问题/确认信息 -> 返回 'QUESTION: 问题内容'\n"
-            "3. 如果不确定 -> 返回 'QUESTION'\n\n"
-            "例如：\n"
-            "- '帮我下载文件' -> TASK: 下载文件\n"
-            "- '下载到哪里了？' -> QUESTION: 询问下载路径\n"
-            "- '帮我做差异分析' -> TASK: 执行差异分析\n"
-            "- '当前工作目录是什么' -> QUESTION: 询问工作目录"
+        return (
+            f"复杂任务已提交\n"
+            f"步骤数: {len(plan.steps)}\n"
+            f"各步骤执行完成后会通知你"
         )
-        
-        response = await self._call_llm(prompt)
-        
-        if not response:
-            return "抱歉，无法理解你的意图。请再说一次。"
-        
-        response = response.strip().upper()
-        
-        if response.startswith("TASK:"):
-            # It's a task - execute it
-            task_desc = response[5:].strip()
-            params = {
-                "question": task_desc,
-                "analysis_type": self._detect_analysis_type(task_desc.lower()) or "general"
-            }
-            return await self._handle_analyze(params, user_id)
-        else:
-            # It's a question - answer it directly
-            # Extract what they're asking about
-            msg_lower = message.lower()
-            if any(k in msg_lower for k in ["工作目录", "目录", "路径", "哪里", "到哪"]):
-                if context and "当前工作目录" in context:
-                    workdir = context.split("当前工作目录:")[1].split("\n")[0].strip()
-                    return "下载会保存到工作目录: " + workdir
-            return "请告诉我你想了解什么？"
+
+    # ───────────────────────────────────────────────────────────────
+    # Helpers
+    # ───────────────────────────────────────────────────────────────
+
+    def _extract_folder_name(self, text: str) -> str:
+        patterns = [r'文件夹 ?([^\s]+)', r'创建 ?([^\s]+)', r'mkdir\s+([^\s]+)']
+        for p in patterns:
+            m = re.search(p, text)
+            if m:
+                return m.group(1).strip()
+        return "untitled"
+
+    def _extract_target(self, text: str, default: str) -> str:
+        patterns = [r'[/~][^\s]+', r'到\s*([^\s]+)']
+        for p in patterns:
+            m = re.search(p, text)
+            if m:
+                return m.group(1).strip()
+        return default
 
     # ───────────────────────────────────────────────────────────────
     # Executor Event Handler
@@ -677,10 +555,6 @@ class OrchestratorAgent:
 
     def on_executor_event(self, event: dict):
         """Handle executor notifications."""
-        event_type = event.get("type")
-        user_id = event.get("user_id")
-        message = event.get("message", "")
-        logger.info(f"Orchestrator: executor event {event_type} for {user_id}")
         if self._notify_callback:
             self._notify_callback(event)
 
