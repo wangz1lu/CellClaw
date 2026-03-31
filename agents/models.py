@@ -202,13 +202,15 @@ class ExecutionPlan:
 
 
 @dataclass
+@dataclass
 class Intent:
     """User intent parsed from message"""
-    original: str
+    original: str = ""
     is_simple_task: bool = False
     intent_type: str = "unknown"
     skill_needed: str = None
     confidence: float = 0.0
+    suggested_steps: list = None
 
 
 @dataclass

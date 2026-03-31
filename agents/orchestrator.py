@@ -19,20 +19,10 @@ from agents.base import BaseAgent
 from agents.memory import SharedMemory, TaskMemory, get_shared_memory
 from agents.models import (
     AgentConfig, AgentType, UserContext, 
-    TaskStep, ExecutionPlan, PlanStatus, TaskStatus
+    TaskStep, ExecutionPlan, PlanStatus, TaskStatus, Intent
 )
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class Intent:
-    """User intent parsed from message"""
-    original: str
-    is_simple_task: bool = False
-    intent_type: str = "unknown"
-    skill_needed: Optional[str] = None
-    confidence: float = 0.0
 
 
 class OrchestratorAgent:
@@ -105,10 +95,16 @@ class OrchestratorAgent:
         # Add to history
         self.base.add_to_history(user_id, "user", message)
 
-        # Step 1: Understand intent via Planner
+        # Step 1: Check if conversational (not a task)
+        if self.planner._is_conversational(message):
+            response = self._handle_conversational(message, user_id)
+            self.base.add_to_history(user_id, "assistant", response)
+            return response
+
+        # Step 2: Understand intent via Planner
         intent = await self.planner.understand(message, user_id)
 
-        # Step 2: Handle based on complexity
+        # Step 3: Handle based on complexity
         if intent.is_simple_task:
             response = await self._handle_simple(message, intent, user_id, channel_id)
         else:
@@ -119,9 +115,61 @@ class OrchestratorAgent:
 
         return response
 
+    def _handle_conversational(self, message: str, user_id: str) -> str:
+        """Handle conversational messages - no task submission"""
+        msg_lower = message.lower().strip()
+        
+        # Greetings
+        greetings = ["你好", "hi", "hello", "嗨", "在吗", "在不在"]
+        if any(g in msg_lower for g in greetings):
+            return (
+                "你好！我是 CellClaw，你的生物信息分析助手。\n"
+                "有什么我可以帮你的吗？\n\n"
+                "我可以帮你：\n"
+                "- 做单细胞数据分析（scRNA, snRNA）\n"
+                "- 差异分析、细胞注释\n"
+                "- 批次效应校正\n"
+                "- 可视化\n\n"
+                "直接告诉我你想做什么就行！"
+            )
+        
+        # Thanks
+        thanks = ["谢谢", "thanks", "谢了", "多谢"]
+        if any(t in msg_lower for t in thanks):
+            return "不客气！有问题随时问我"
+        
+        # Help
+        if "help" in msg_lower or "怎么" in msg_lower or "如何" in msg_lower:
+            return (
+                "CellClaw 使用指南\n\n"
+                "直接用中文描述你想做的事就行，例如：\n"
+                "- 帮我做差异分析\n"
+                "- 跑一个SCTransform分析\n"
+                "- 生成细胞注释图\n\n"
+                "我会自动识别任务类型，使用合适的技能来处理！"
+            )
+        
+        # Who are you
+        if "你是谁" in message:
+            return "我是 CellClaw，一个专注于单细胞组学分析的 AI 助手。基于 Multi-Agent 系统构建，可以帮你完成各种生物信息分析任务."
+        
+        # Goodbye
+        if any(c in msg_lower for c in ["再见", "拜拜", "晚安", "早安"]):
+            return "再见！有需要随时召唤我"
+        
+        # Default conversational
+        return "明白了！告诉我你想做什么分析？"
+
     async def _handle_simple(self, message: str, intent, user_id: str, channel_id: str = None) -> str:
         """Handle simple tasks: generate → review → submit → return"""
         logger.info(f"Orchestrator: Simple task - {intent.intent_type}")
+
+        # For query-type tasks, don't generate code or submit jobs
+        if intent.intent_type == "query":
+            return await self._handle_query(message, user_id)
+        
+        if intent.intent_type == "management":
+            return await self._handle_management(message, user_id)
 
         # Generate code
         code_result = await self.coder.generate(
@@ -135,7 +183,7 @@ class OrchestratorAgent:
 
         if not review_result.can_execute:
             issues = "\n".join([f"- [{i.severity}] {i.category}: {i.message}" for i in review_result.issues])
-            return f"❌ 代码审查未通过:\n{issues}"
+            return f"代码审查未通过:\n{issues}"
 
         # Save script
         script_path = await self.coder.save_script(code_result.code, code_result.language)
@@ -150,22 +198,51 @@ class OrchestratorAgent:
         )
 
         # Return immediate response
-        skill_info = f"📌 使用 Skill: {intent.skill_needed}\n" if intent.skill_needed else "📌 未调用 Skill\n"
+        skill_info = f"使用 Skill: {intent.skill_needed}\n" if intent.skill_needed else "未调用 Skill\n"
 
         return (
-            f"✅ 任务已提交\n"
+            f"任务已提交\n"
             f"{skill_info}"
             f"任务 PID: `{job_id}`\n"
             f"描述: {message}\n"
-            f"⏳ Executor 正在执行，完成后会通知你"
+            f"Executor 正在执行，完成后会通知你"
         )
+
+    async def _handle_query(self, message: str, user_id: str) -> str:
+        """Handle query-type simple tasks without submitting jobs"""
+        msg_lower = message.lower()
+        
+        if any(k in msg_lower for k in ["job", "任务", "状态"]):
+            # Get job status
+            jobs = self.executor.get_active_jobs(user_id)
+            if not jobs:
+                return "当前没有运行中的任务"
+            
+            lines = ["运行中的任务:"]
+            for job in jobs:
+                lines.append(f"- {job.description}: {job.status} ({job.progress:.0%})")
+            return "\n".join(lines)
+        
+        if "list" in msg_lower or "服务器" in message:
+            # List servers
+            server_config = self.base.get_server_config(user_id)
+            if not server_config:
+                return "没有配置的服务器。告诉我你的服务器信息，我会保存。"
+            return f"已配置服务器: {list(server_config.keys())}"
+        
+        # Default query response
+        return f"查询: {message}\n\n告诉我你想做什么分析任务？"
+    
+    async def _handle_management(self, message: str, user_id: str) -> str:
+        """Handle management-type simple tasks"""
+        return f"管理操作: {message}\n\n请告诉我具体想做什么？"
 
     async def _handle_complex(self, message: str, intent, user_id: str, channel_id: str = None) -> str:
         """Handle complex tasks: create plan → execute steps"""
         logger.info(f"Orchestrator: Complex task - {intent.intent_type}")
 
         # Create plan
-        plan = await self.planner.create_plan(message, intent, user_id)
+        plan = self.planner.create_plan(message, intent, user_id)
         self._plans[plan.plan_id] = plan
 
         # Execute plan steps
@@ -200,10 +277,10 @@ class OrchestratorAgent:
             step.status = TaskStatus.RUNNING
 
         return (
-            f"📋 任务计划已创建\n"
+            f"任务计划已创建\n"
             f"步骤数: {len(plan.steps)}\n"
             f"技能: {intent.skill_needed or '通用'}\n"
-            f"⏳ Executor 正在执行各步骤，完成后会通知你"
+            f"Executor 正在执行各步骤，完成后会通知你"
         )
 
     # ───────────────────────────────────────────────────────────────

@@ -20,7 +20,7 @@ from agents.models import (
     ServerInfo, UserContext
 )
 from agents.orchestrator import OrchestratorAgent, Intent
-from agents.planner import PlannerAgent, IntentResult
+from agents.planner import PlannerAgent
 from agents.coder import CoderAgent, CodeResult
 from agents.reviewer import ReviewerAgent, ReviewIssue, ReviewResult
 from agents.executor import ExecutorAgent, JobStatus

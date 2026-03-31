@@ -18,16 +18,6 @@ from agents.models import AgentConfig, AgentType, TaskStep, ExecutionPlan, Inten
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class IntentResult:
-    """Result of intent understanding"""
-    intent_type: str           # "analysis", "visualization", "query", "management"
-    is_simple: bool            # True if can be done in one step
-    confidence: float          # 0.0 - 1.0
-    skill_needed: Optional[str]  # e.g., "deg_analysis", "visualization_R"
-    suggested_steps: list[str]   # List of step descriptions
-
-
 class PlannerAgent:
     """
     PlannerAgent understands user tasks and creates execution plans.
@@ -38,6 +28,15 @@ class PlannerAgent:
     - Identify required skills
     - Create step-by-step execution plan
     """
+    
+    # Conversational intents - should NOT trigger tasks
+    CONVERSATIONAL_PATTERNS = [
+        "你好", "hi", "hello", "嗨", "在吗", "在不在",
+        "谢谢", "thanks", "谢了", "多谢",
+        "help", "怎么", "如何", "怎样", "问一下",
+        "再见", "拜拜", "晚安", "早安",
+        "你是谁", "what can you do", "有什么用"
+    ]
     
     def __init__(self, config: AgentConfig = None, shared_memory=None):
         self.config = config or AgentConfig.default_for(AgentType.PLANNER)
@@ -121,7 +120,7 @@ class PlannerAgent:
             user_id: User ID for context
             
         Returns:
-            IntentResult with parsed intent
+            Intent with parsed intent
         """
         message_lower = message.lower()
         
@@ -152,20 +151,40 @@ class PlannerAgent:
             intent_type=intent_type,
             is_simple_task=is_simple,
             confidence=confidence,
-            skill_needed=skill_needed
+            skill_needed=skill_needed,
+            suggested_steps=suggested_steps
         )
         logger.info(f"Understood intent: {intent_type}, simple={is_simple}, skill={skill_needed}")
         return result
     
+    def _is_conversational(self, message: str) -> bool:
+        """Check if message is pure conversation, not a task"""
+        msg_lower = message.lower().strip()
+        
+        # Exact match or contains conversational pattern
+        for pattern in self.CONVERSATIONAL_PATTERNS:
+            if pattern.lower() in msg_lower:
+                return True
+        
+        # Very short messages (< 5 chars) that aren't clearly tasks
+        if len(msg_lower) < 5 and not any(c in msg_lower for c in ["分析", "做", "生成", "跑"]):
+            return True
+        
+        return False
+    
     def _is_simple_task(self, message: str, intent_type: str) -> bool:
         """Determine if task is simple (single step)"""
+        # Conversational messages are NOT tasks
+        if self._is_conversational(message):
+            return False
+        
         simple_indicators = [
-            "查看状态", "list", "ls", "status", "help",
-            "查看列表", "有什么"
+            "查看状态", "list", "ls", "status",
+            "查看列表", "有什么", "状态"
         ]
         complex_indicators = [
             "分析", "比较", "整合", "计算",
-            "做", "跑"
+            "做", "跑", "生成", "执行"
         ]
         
         # If contains complex indicators, not simple
@@ -221,7 +240,7 @@ class PlannerAgent:
     # Plan Creation
     # ───────────────────────────────────────────────────────────────
     
-    def create_plan(self, message: str, user_id: str, intent: IntentResult = None) -> ExecutionPlan:
+    def create_plan(self, message: str, intent, user_id: str) -> ExecutionPlan:
         """
         Create an execution plan based on intent.
         
@@ -249,7 +268,7 @@ class PlannerAgent:
             original_task=message,
         )
         
-        if intent.is_simple:
+        if intent.is_simple_task:
             # Simple task: single step
             plan.add_step(TaskStep(
                 id=f"{plan_id}_1",
