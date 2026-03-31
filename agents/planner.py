@@ -147,17 +147,14 @@ class PlannerAgent:
         
         confidence = 0.9 if skill_needed else (0.7 if intent_type != "query" else 0.5)
         
-        # Intent is defined in orchestrator, use dict instead
-        result_dict = {
+        result = Intent(
+            original=message,
             intent_type=intent_type,
-            is_simple=is_simple,
+            is_simple_task=is_simple,
             confidence=confidence,
-            skill_needed=skill_needed,
-            suggested_steps=suggested_steps,
+            skill_needed=skill_needed
         )
-        
-        logger.info(f"Understood intent: {result}")
-        
+        logger.info(f"Understood intent: {intent_type}, simple={is_simple}, skill={skill_needed}")
         return result
     
     def _is_simple_task(self, message: str, intent_type: str) -> bool:
