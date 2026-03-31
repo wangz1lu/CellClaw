@@ -211,8 +211,10 @@ class OrchestratorAgent:
             return {"action": "file_operation", "params": {"operation": msg}, "raw": msg}
         
         # ── Query / check info ─────────────────────────────────────────
-        if any(kw in msg_lower for kw in ["多少", "几个", "有没有", "是什么", "平均", "最多", "最少", "查看", "看看", "告诉我", "查一下", "有什么", "列出"]):
-            return {"action": "query", "params": {"question": msg}, "raw": msg}
+        if any(kw in msg_lower for kw in ["多少", "几个", "有没有", "是什么", "平均", "最多", "最少", "查看", "看看", "告诉我", "查一下", "目前", "当前", "我们"]):
+            # Must be about directory/path/workdir to be query
+            if any(k in msg_lower for k in ["目录", "路径", "工作", "项目", "folder", "path"]):
+                return {"action": "query", "params": {"question": msg}, "raw": msg}
         
         # ── Analysis tasks ─────────────────────────────────────────────
         analysis_type = self._detect_analysis_type(msg_lower)
