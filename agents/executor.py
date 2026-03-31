@@ -98,7 +98,8 @@ class ExecutorAgent:
     async def submit(self, script_path: str, user_id: str,
                      channel_id: str = None,
                      description: str = "分析任务",
-                     skill_used: str = None) -> str:
+                     skill_used: str = None,
+                     script_content: str = None) -> str:
         """
         Submit a job for background execution.
         Executor reports to user INDEPENDENTLY when job starts/updates/completes.
