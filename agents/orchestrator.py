@@ -615,15 +615,14 @@ class OrchestratorAgent:
                 return "当前环境信息：\n" + context
             return "暂无环境信息。请先配置服务器和工作目录。"
         
-        # Check if user confirmed a previous request
-        if any(k in msg_lower for k in ["好的", "是", "是的", "执行", "开始", "go", "do it", "确认"]):
-            # User confirmed - check if we have a pending task to execute
-            # This is where we should execute the actual task
-            # For now, route to execute a general task
+        # Check if user confirmed - only execute if it's a clear task request
+        if any(k in msg_lower for k in ["好的", "是", "是的", "执行", "开始", "确认"]):
             return await self._execute_task_from_message(user_id, message)
         
-        # If user says "帮我..." - execute it directly
-        if any(k in msg_lower for k in ["帮我", "生成", "编写", "创建", "执行", "做", "跑", "下载"]):
+        # Only execute direct task requests, not questions
+        # "帮我下载" = task, "下载到哪里了？" = question
+        task_indicators = ["帮我", "帮我做", "帮我生成", "帮我编写", "帮我创建", "帮我执行", "帮我下载", "生成", "编写", "创建", "执行", "做", "跑"]
+        if any(k in msg_lower for k in task_indicators):
             return await self._execute_task_from_message(user_id, message)
         
         # Default - use LLM to respond
@@ -637,12 +636,20 @@ class OrchestratorAgent:
     async def _execute_task_from_message(self, user_id: str, message: str) -> str:
         """
         Execute a task based on user message.
-        This routes to the multi-agent flow for actual execution.
+        Only actual action requests are executed, not questions.
         """
-        # Route to analyze handler which will use Planner -> Coder -> Reviewer -> Executor
+        msg_lower = message.lower()
+        
+        # If it's just a question, don't execute - answer it
+        if any(k in msg_lower for k in ["哪里", "到哪", "什么", "是不是", "吗", "?"]):
+            # This is a question, not a task - answer it
+            context = self._build_context(user_id)
+            return "下载会保存到当前工作目录: " + context.split("当前工作目录:")[1].split("\n")[0] if "当前工作目录:" in context else "请先设置工作目录"
+        
+        # Route to analyze handler for actual task execution
         params = {
             "question": message,
-            "analysis_type": "download"  # Treat download as a task
+            "analysis_type": self._detect_analysis_type(msg_lower) or "general"
         }
         return await self._handle_analyze(params, user_id)
 
