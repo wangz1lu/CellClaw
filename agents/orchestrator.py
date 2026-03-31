@@ -214,19 +214,31 @@ Respond with ONLY the category word, nothing else."""
         # Build rich context from REAL data sources
         context_parts = []
         
-        # REAL Servers from SSH Manager
-        real_servers = []
+        # REAL Servers and Workdir from SSH Manager
         if self._ssh_manager and hasattr(self._ssh_manager, '_registry'):
             try:
+                # Get servers
                 server_configs = self._ssh_manager._registry.list_servers(user_id)
-                for cfg in server_configs:
-                    active = " (当前)" if hasattr(cfg, 'last_used') else ""
-                    real_servers.append("  - " + cfg.server_id + ": " + cfg.username + "@" + cfg.host + ":" + str(cfg.port))
+                if server_configs:
+                    server_lines = []
+                    for cfg in server_configs:
+                        server_lines.append("  - " + cfg.server_id + ": " + cfg.username + "@" + cfg.host + ":" + str(cfg.port))
+                    context_parts.append("用户配置的服务器:\n" + "\n".join(server_lines))
+                else:
+                    context_parts.append("用户尚未配置任何服务器")
+                
+                # Get session info (active workdir, conda env)
+                session = self._ssh_manager._registry.get_session(user_id)
+                if session:
+                    if session.active_project_path:
+                        context_parts.append("当前工作目录: " + session.active_project_path)
+                    if session.active_env:
+                        context_parts.append("当前conda环境: " + session.active_env)
+                    if session.active_server_id:
+                        context_parts.append("当前服务器: " + session.active_server_id)
             except Exception as e:
-                logger.warning(f"Failed to get servers: {e}")
-        
-        if real_servers:
-            context_parts.append("用户配置的服务器:\n" + "\n".join(real_servers))
+                logger.warning(f"Failed to get SSH context: {e}")
+                context_parts.append("用户尚未配置任何服务器")
         else:
             context_parts.append("用户尚未配置任何服务器")
         
@@ -242,18 +254,17 @@ Respond with ONLY the category word, nothing else."""
         
         system_prompt = (
             "You are CellClaw, a professional and friendly bioinformatics analysis assistant.\n\n"
-            "IMPORTANT: You have SSH access to the user's servers. You KNOW about their infrastructure.\n"
-            "Do NOT say \"I don't have access\" or \"I can't see\" - you CAN see these things.\n\n"
+            "IMPORTANT: You have SSH access to the user's servers and KNOW their project setup.\n"
+            "Do NOT say \"I don't know\" or \"I can't see\" about servers/workdirs - you have this info.\n\n"
             "Current user environment:\n" + context + "\n\n"
             "Your personality:\n"
             "- Professional and reliable\n"
             "- Helpful and proactive\n"
             "- Speak in the user's language (Chinese or English)\n"
             "You can help with: single-cell analysis, differential expression, cell annotation, batch correction, visualization\n\n"
-            "You should:\n"
-            "- Answer questions about capabilities based on what you know about the user's setup\n"
-            "- Greet users warmly\n"
-            "- Be aware of their servers and environments when answering\n\n"
+            "When user asks about project/directory/workdir:\n"
+            "- Tell them based on the context above\n"
+            "- Do NOT run commands to check - you already know the answer\n\n"
             "Be conversational, helpful, and knowledgeable about the user's environment."
         )
 
