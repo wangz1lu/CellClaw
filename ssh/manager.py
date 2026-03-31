@@ -373,7 +373,7 @@ class SSHManager:
         if not result.success:
             return f"❌ 路径不存在或无权限：`{path}`"
         self._registry.set_active_project(discord_user_id, path)
-        return f"✅ 项目目录已设置为 `{path}`"
+        return f"✅ 工作目录已设置为 `{path}`"
 
     async def list_project_files(
         self, discord_user_id: str, path: Optional[str] = None
