@@ -130,17 +130,37 @@ class ExecutorAgent:
         logger.info(f"Executor: Submitting job {job_id} for user {user_id}")
 
         try:
-            # Submit to SSH
+            # Submit to SSH - use submit_analysis to handle script upload
             if self._ssh:
-                run_cmd = f"Rscript {script_path}" if script_path.endswith(".R") else f"python {script_path}"
-                job = await self._ssh.submit_background(
-                    discord_user_id=user_id,
-                    run_cmd=run_cmd,
-                    description=description
-                )
-                job_info.log_path = job.log_path
-                # Use actual job ID from SSH
-                actual_job_id = job.job_id
+                # Read script content
+                if script_path and os.path.exists(script_path):
+                    with open(script_path, 'r') as f:
+                        script_content = f.read()
+                    # Determine language
+                    if script_path.endswith(".R"):
+                        script_ext = "R"
+                    elif script_path.endswith(".py"):
+                        script_ext = "py"
+                    else:
+                        script_ext = "sh"
+                    
+                    # Use submit_analysis which handles upload
+                    job = await self._ssh.submit_analysis(
+                        discord_user_id=user_id,
+                        script=script_content,
+                        script_ext=script_ext,
+                        description=description
+                    )
+                    job_info.log_path = job.log_path
+                    actual_job_id = job.job_id
+                else:
+                    # No script file, run command directly
+                    job = await self._ssh.submit_background(
+                        discord_user_id=user_id,
+                        run_cmd=script_path or "echo 'No script'",
+                        description=description
+                    )
+                    actual_job_id = job.job_id
             else:
                 actual_job_id = job_id
 
