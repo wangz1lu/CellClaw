@@ -5,10 +5,15 @@ OrchestratorAgent - Main Coordinator
 Coordinates all agents in the multi-agent system.
 User communicates ONLY with Orchestrator - it's the face of the system.
 Executor Agent reports back independently.
+
+Two modes:
+- Natural conversation: LLM chats with user (not a task)
+- Task execution: Multi-agent flow (Planner → Coder → Reviewer → Executor)
 """
 
 from __future__ import annotations
 import os
+import json
 import logging
 import asyncio
 from typing import Optional, Callable
@@ -30,7 +35,8 @@ class OrchestratorAgent:
     OrchestratorAgent - The ONLY agent users talk to.
     
     Responsibilities:
-    - Understand user intent (via Planner)
+    - LLM-based intent understanding
+    - Route to conversation or task flow
     - Coordinate task execution
     - Return responses to user
     
@@ -40,6 +46,11 @@ class OrchestratorAgent:
     def __init__(self, config: AgentConfig = None):
         self.config = config or AgentConfig.default_for(AgentType.ORCHESTRATOR)
         self.name = self.config.name
+
+        # LLM configuration
+        self._api_key = os.getenv("OMICS_LLM_API_KEY")
+        self._base_url = os.getenv("OMICS_LLM_BASE_URL", "https://api.deepseek.com/v1")
+        self._model = os.getenv("OMICS_LLM_MODEL", "deepseek-chat")
 
         # Initialize base agent for context
         self.base = BaseAgent()
@@ -70,13 +81,173 @@ class OrchestratorAgent:
         # Active plans
         self._plans: dict[str, ExecutionPlan] = {}
 
-        logger.info(f"OrchestratorAgent initialized")
+        logger.info(f"OrchestratorAgent initialized with LLM: {self._model}")
 
     def set_notify_callback(self, callback: Callable):
         """Set callback for user notifications"""
         self._notify_callback = callback
         # Also set it for executor
         self.executor.set_user_notify_callback(callback)
+
+    # ───────────────────────────────────────────────────────────────
+    # LLM Integration
+    # ───────────────────────────────────────────────────────────────
+
+    async def _call_llm(self, prompt: str, system: str = None) -> str:
+        """
+        Call LLM API.
+        
+        Args:
+            prompt: User prompt
+            system: Optional system prompt
+            
+        Returns:
+            LLM response text
+        """
+        import aiohttp
+        
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+        
+        payload = {
+            "model": self._model,
+            "messages": messages,
+            "temperature": 0.3,  # Lower temp for more consistent outputs
+        }
+        
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{self._base_url}/chat/completions",
+                    json=payload,
+                    headers=headers,
+                    timeout=aiohttp.ClientTimeout(total=30)
+                ) as resp:
+                    if resp.status != 200:
+                        error = await resp.text()
+                        logger.error(f"LLM API error: {resp.status} - {error}")
+                        return None
+                    
+                    result = await resp.json()
+                    return result["choices"][0]["message"]["content"]
+        except asyncio.TimeoutError:
+            logger.error("LLM API timeout")
+            return None
+        except Exception as e:
+            logger.error(f"LLM API error: {e}")
+            return None
+
+    async def _llm_understand_intent(self, message: str) -> str:
+        """
+        Use LLM to understand if user is:
+        - "task": wants to execute a task
+        - "conversation": just chatting
+        
+        Returns:
+            "task" or "conversation"
+        """
+        system_prompt = """You are an intent classifier for a bioinformatics assistant.
+
+Classify the user message into ONE of these categories:
+- "task": User wants to execute a bioinformatics analysis task (e.g., "帮我做差异分析", "跑一下SCTransform", "生成可视化")
+- "conversation": User is just chatting, asking about capabilities, or saying hello/goodbye (e.g., "你好", "你会什么", "谢谢", "你是谁")
+
+Rules:
+- If user describes something they want DONE -> task
+- If user asks what you CAN do -> conversation  
+- If user greets or says goodbye -> conversation
+- If user says thanks -> conversation
+
+Respond with ONLY the category word, nothing else."""
+
+        response = await self._call_llm(message, system=system_prompt)
+        
+        if response:
+            response = response.strip().lower()
+            if response in ["task", "conversation"]:
+                logger.info(f"LLM intent: {response}")
+                return response
+        
+        # Fallback: use keyword-based detection
+        logger.warning("LLM intent detection failed, using fallback")
+        return self._fallback_intent_detection(message)
+
+    def _fallback_intent_detection(self, message: str) -> str:
+        """
+        Fallback keyword-based intent detection.
+        Used when LLM is unavailable.
+        """
+        msg_lower = message.lower()
+        
+        # Task indicators
+        task_keywords = ["帮我", "做", "跑", "分析", "生成", "计算", "执行", "处理"]
+        for kw in task_keywords:
+            if kw in msg_lower:
+                return "task"
+        
+        # Default to conversation
+        return "conversation"
+
+    async def _llm_converse(self, message: str, user_id: str) -> str:
+        """
+        LLM-based natural conversation (not a task).
+        """
+        context = self.base.build_context_for_llm(user_id)
+        
+        system_prompt = """You are CellClaw, a professional and friendly bioinformatics analysis assistant.
+
+Your personality:
+- Professional and reliable
+- Helpful and proactive
+- Speak in the user's language (Chinese or English)
+- You can help with: single-cell analysis (scRNA, snRNA), differential expression, cell annotation, batch correction, visualization
+
+You should:
+- Answer questions about your capabilities naturally
+- Greet users warmly
+- Thank users politely
+- Explain what you can do when asked
+- NOT generate code or submit tasks
+
+Be conversational and natural."""
+
+        user_prompt = f"User said: {message}\n\nContext: {context}"
+        
+        response = await self._call_llm(user_prompt, system=system_prompt)
+        
+        if response:
+            return response
+        
+        # Fallback if LLM fails
+        return self._fallback_conversation(message)
+
+    def _fallback_conversation(self, message: str) -> str:
+        """
+        Fallback conversation when LLM is unavailable.
+        """
+        msg_lower = message.lower()
+        
+        # Simple pattern matching fallback
+        if any(g in msg_lower for g in ["你好", "hi", "hello", "嗨"]):
+            return "你好！我是 CellClaw，你的生物信息分析助手。有什么我可以帮你的吗？"
+        
+        if any(t in msg_lower for t in ["谢谢", "thanks"]):
+            return "不客气！有问题随时问我。"
+        
+        if "技能" in message or "能做什么" in message:
+            return "我可以帮你做：\n- 单细胞数据分析（scRNA, snRNA）\n- 差异表达分析\n- 细胞类型注释\n- 批次效应校正\n- 数据可视化\n\n直接告诉我你想做什么就行！"
+        
+        if "你是谁" in message:
+            return "我是 CellClaw，一个专注于生物信息学分析的 AI 助手。"
+        
+        return "明白了！告诉我你想做什么分析？"
 
     # ───────────────────────────────────────────────────────────────
     # Main Processing
@@ -87,6 +258,10 @@ class OrchestratorAgent:
         Main entry point for processing user messages.
         User ONLY talks to Orchestrator.
         
+        Flow:
+        1. LLM understands intent (task vs conversation)
+        2. Route to appropriate handler
+        
         Returns:
             str: Response to send to user
         """
@@ -95,70 +270,37 @@ class OrchestratorAgent:
         # Add to history
         self.base.add_to_history(user_id, "user", message)
 
-        # Step 1: Check if conversational (not a task)
-        if self.planner._is_conversational(message):
-            response = self._handle_conversational(message, user_id)
-            self.base.add_to_history(user_id, "assistant", response)
-            return response
+        # Step 1: LLM understands intent
+        intent_type = await self._llm_understand_intent(message)
+        logger.info(f"Intent detected: {intent_type}")
 
-        # Step 2: Understand intent via Planner
-        intent = await self.planner.understand(message, user_id)
-
-        # Step 3: Handle based on complexity
-        if intent.is_simple_task:
-            response = await self._handle_simple(message, intent, user_id, channel_id)
+        # Step 2: Route based on intent
+        if intent_type == "task":
+            # Task flow: understand → plan → execute
+            response = await self._handle_task(message, user_id, channel_id)
         else:
-            response = await self._handle_complex(message, intent, user_id, channel_id)
+            # Conversation flow: LLM chats naturally
+            response = await self._llm_converse(message, user_id)
 
         # Add to history
         self.base.add_to_history(user_id, "assistant", response)
 
         return response
 
-    def _handle_conversational(self, message: str, user_id: str) -> str:
-        """Handle conversational messages - no task submission"""
-        msg_lower = message.lower().strip()
+    async def _handle_task(self, message: str, user_id: str, channel_id: str) -> str:
+        """
+        Handle task execution: understand → plan → execute.
+        """
+        # Understand task details via Planner
+        intent = await self.planner.understand(message, user_id)
         
-        # Greetings
-        greetings = ["你好", "hi", "hello", "嗨", "在吗", "在不在"]
-        if any(g in msg_lower for g in greetings):
-            return (
-                "你好！我是 CellClaw，你的生物信息分析助手。\n"
-                "有什么我可以帮你的吗？\n\n"
-                "我可以帮你：\n"
-                "- 做单细胞数据分析（scRNA, snRNA）\n"
-                "- 差异分析、细胞注释\n"
-                "- 批次效应校正\n"
-                "- 可视化\n\n"
-                "直接告诉我你想做什么就行！"
-            )
-        
-        # Thanks
-        thanks = ["谢谢", "thanks", "谢了", "多谢"]
-        if any(t in msg_lower for t in thanks):
-            return "不客气！有问题随时问我"
-        
-        # Help
-        if "help" in msg_lower or "怎么" in msg_lower or "如何" in msg_lower:
-            return (
-                "CellClaw 使用指南\n\n"
-                "直接用中文描述你想做的事就行，例如：\n"
-                "- 帮我做差异分析\n"
-                "- 跑一个SCTransform分析\n"
-                "- 生成细胞注释图\n\n"
-                "我会自动识别任务类型，使用合适的技能来处理！"
-            )
-        
-        # Who are you
-        if "你是谁" in message:
-            return "我是 CellClaw，一个专注于单细胞组学分析的 AI 助手。基于 Multi-Agent 系统构建，可以帮你完成各种生物信息分析任务."
-        
-        # Goodbye
-        if any(c in msg_lower for c in ["再见", "拜拜", "晚安", "早安"]):
-            return "再见！有需要随时召唤我"
-        
-        # Default conversational
-        return "明白了！告诉我你想做什么分析？"
+        logger.info(f"Task intent: {intent.intent_type}, simple={intent.is_simple_task}, skill={intent.skill_needed}")
+
+        # Route to simple or complex handler
+        if intent.is_simple_task:
+            return await self._handle_simple(message, intent, user_id, channel_id)
+        else:
+            return await self._handle_complex(message, intent, user_id, channel_id)
 
     async def _handle_simple(self, message: str, intent, user_id: str, channel_id: str = None) -> str:
         """Handle simple tasks: generate → review → submit → return"""
