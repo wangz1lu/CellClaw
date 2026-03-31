@@ -65,6 +65,9 @@ class MultiAgentClient:
             # Connect SSH to executor
             if self._ssh and hasattr(self.orchestrator.executor, '_ssh'):
                 self.orchestrator.executor._ssh = self._ssh
+            
+            # Also give orchestrator access to SSH manager for context
+            self.orchestrator.set_ssh_manager(self._ssh)
 
             logger.info("Multi-Agent client initialized")
             logger.info(f"  Orchestrator: {self.orchestrator}")

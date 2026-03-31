@@ -72,6 +72,10 @@ class OrchestratorAgent:
         from agents.executor import ExecutorAgent
         self.executor = ExecutorAgent()
         
+        # Real data sources (injected later)
+        self._ssh_manager = None
+        self._job_tracker = None
+        
         # Callback for executor to notify Orchestrator
         self.executor.set_notify_callback(self.on_executor_event)
         
@@ -88,6 +92,14 @@ class OrchestratorAgent:
         self._notify_callback = callback
         # Also set it for executor
         self.executor.set_user_notify_callback(callback)
+
+    def set_ssh_manager(self, ssh_manager):
+        """Set SSH manager for real server data"""
+        self._ssh_manager = ssh_manager
+
+    def set_job_tracker(self, job_tracker):
+        """Set job tracker for real job data"""
+        self._job_tracker = job_tracker
 
     # ───────────────────────────────────────────────────────────────
     # LLM Integration
@@ -199,31 +211,32 @@ Respond with ONLY the category word, nothing else."""
         """
         LLM-based natural conversation with full context awareness.
         """
-        # Build rich context from user's environment
+        # Build rich context from REAL data sources
         context_parts = []
         
-        # Servers
-        servers = self.base.get_all_servers(user_id)
-        if servers:
-            server_lines = []
-            for name, server in servers.items():
-                active = " (当前)" if name == self.base.get_active_server(user_id) else ""
-                host = getattr(server, 'host', 'unknown')
-                env = getattr(server, 'conda_env', None) or '未设置'
-                server_lines.append("  - " + name + active + ": " + host + ", conda环境: " + env)
-            context_parts.append("用户配置的服务器:\n" + "\n".join(server_lines))
+        # REAL Servers from SSH Manager
+        real_servers = []
+        if self._ssh_manager and hasattr(self._ssh_manager, '_registry'):
+            try:
+                server_configs = self._ssh_manager._registry.list_servers(user_id)
+                for cfg in server_configs:
+                    active = " (当前)" if hasattr(cfg, 'last_used') else ""
+                    real_servers.append("  - " + cfg.server_id + ": " + cfg.username + "@" + cfg.host + ":" + str(cfg.port))
+            except Exception as e:
+                logger.warning(f"Failed to get servers: {e}")
+        
+        if real_servers:
+            context_parts.append("用户配置的服务器:\n" + "\n".join(real_servers))
         else:
             context_parts.append("用户尚未配置任何服务器")
         
-        # Working directory
-        workdir = self.base.get_workdir(user_id)
-        if workdir:
-            context_parts.append("当前工作目录: " + workdir)
-        
-        # Active jobs
-        jobs = self.executor.get_active_jobs(user_id)
-        if jobs:
-            context_parts.append("运行中的任务数: " + str(len(jobs)))
+        # REAL Jobs from Executor
+        try:
+            jobs = self.executor.get_active_jobs(user_id)
+            if jobs:
+                context_parts.append("运行中的任务数: " + str(len(jobs)))
+        except:
+            pass
         
         context = "\n\n".join(context_parts) if context_parts else "无"
         
