@@ -39,10 +39,13 @@ class PlannerAgent:
     - Create step-by-step execution plan
     """
     
-    def __init__(self, config: AgentConfig = None):
+    def __init__(self, config: AgentConfig = None, shared_memory=None):
         self.config = config or AgentConfig.default_for(AgentType.PLANNER)
         self.name = self.config.name
         self.base = BaseAgent()
+        
+        # Shared memory for cross-agent knowledge
+        self.shared_memory = shared_memory
         
         # API config
         self._api_key = self.config.api_key or os.getenv("PLANNER_API_KEY") or os.getenv("OMICS_LLM_API_KEY")
@@ -144,7 +147,8 @@ class PlannerAgent:
         
         confidence = 0.9 if skill_needed else (0.7 if intent_type != "query" else 0.5)
         
-        result = Intent(
+        # Intent is defined in orchestrator, use dict instead
+        result_dict = {
             intent_type=intent_type,
             is_simple=is_simple,
             confidence=confidence,

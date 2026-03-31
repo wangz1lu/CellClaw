@@ -128,10 +128,13 @@ cat("Harmony batch correction complete.\\n")
         }
     }
     
-    def __init__(self, config: AgentConfig = None):
+    def __init__(self, config: AgentConfig = None, shared_memory=None):
         self.config = config or AgentConfig.default_for(AgentType.CODER)
         self.name = self.config.name
         self.base = BaseAgent()
+        
+        # Shared memory for cross-agent knowledge
+        self.shared_memory = shared_memory
         
         # API config
         self._api_key = self.config.api_key or os.getenv("CODER_API_KEY") or os.getenv("OMICS_LLM_API_KEY")
@@ -201,7 +204,13 @@ cat("Harmony batch correction complete.\\n")
     async def _generate_from_description(self, task_description: str, 
                                         language: str, context: dict) -> str:
         """Generate code from task description using LLM"""
-        # TODO: Use LLM for code generation
+        # Check shared memory for similar successful codes
+        if self.shared_memory:
+            relevant_codes = self.shared_memory.get_relevant(
+                task_description, category="code", limit=3
+            )
+            for entry in relevant_codes:
+                logger.info(f"Coder: Found relevant code from {entry.agent}: {entry.id}")
         # For now, return a placeholder
         
         if language == "R":
@@ -231,6 +240,17 @@ print("Task: {task_description}")
     # ───────────────────────────────────────────────────────────────
     # Script File Management
     # ───────────────────────────────────────────────────────────────
+    
+    async def save_code_to_memory(self, code: str, skill_id: str = None, language: str = "R"):
+        """Save generated code to shared memory for future reference"""
+        if self.shared_memory and skill_id:
+            self.shared_memory.add_code_template(
+                agent="coder",
+                skill_id=skill_id,
+                code=code,
+                language=language
+            )
+            logger.info(f"Coder: Saved code to shared memory for skill {skill_id}")
     
     async def save_script(self, code: str, language: str, 
                          filename: str = None) -> str:

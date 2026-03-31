@@ -16,6 +16,7 @@ from dataclasses import dataclass
 import secrets
 
 from agents.base import BaseAgent
+from agents.memory import SharedMemory, TaskMemory, get_shared_memory
 from agents.models import (
     AgentConfig, AgentType, UserContext, 
     TaskStep, ExecutionPlan, PlanStatus, TaskStatus
@@ -53,14 +54,18 @@ class OrchestratorAgent:
         # Initialize base agent for context
         self.base = BaseAgent()
 
-        # Internal agents (decision-making)
+        # Internal agents (decision-making) - share memory
         from agents.planner import PlannerAgent
         from agents.coder import CoderAgent
         from agents.reviewer import ReviewerAgent
         
-        self.planner = PlannerAgent()
-        self.coder = CoderAgent()
-        self.reviewer = ReviewerAgent()
+        # Shared memory for all agents
+        self.shared_memory = get_shared_memory()
+        
+        # Initialize agents with shared memory
+        self.planner = PlannerAgent(shared_memory=self.shared_memory)
+        self.coder = CoderAgent(shared_memory=self.shared_memory)
+        self.reviewer = ReviewerAgent(shared_memory=self.shared_memory)
 
         # Executor (external, has independent communication)
         from agents.executor import ExecutorAgent

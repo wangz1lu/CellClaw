@@ -58,10 +58,13 @@ class ReviewerAgent:
     # Common path patterns that need validation
     REQUIRED_PATH_VARS = ["input_file", "output_file", "workdir", "data_dir"]
     
-    def __init__(self, config: AgentConfig = None):
+    def __init__(self, config: AgentConfig = None, shared_memory=None):
         self.config = config or AgentConfig.default_for(AgentType.REVIEWER)
         self.name = self.config.name
         self.base = BaseAgent()
+        
+        # Shared memory for cross-agent knowledge
+        self.shared_memory = shared_memory
         
         # API config
         self._api_key = self.config.api_key or os.getenv("REVIEWER_API_KEY") or os.getenv("OMICS_LLM_API_KEY")
@@ -109,6 +112,16 @@ class ReviewerAgent:
         )
         
         logger.info(f"Review complete: {result.error_count} errors, {result.warning_count} warnings")
+        
+        # Learn from review - save patterns/issues to shared memory
+        if self.shared_memory:
+            for issue in issues:
+                self.shared_memory.add_review_note(
+                    agent="reviewer",
+                    skill_id=None,  # Could extract from code context
+                    note=issue.message,
+                    issue_type=issue.category
+                )
         
         return result
     

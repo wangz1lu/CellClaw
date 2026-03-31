@@ -17,6 +17,7 @@ from typing import Optional, Any
 from dataclasses import dataclass, field
 
 from agents.models import AgentConfig, AgentType, UserContext, ServerInfo
+from agents.memory import SharedMemory, TaskMemory, get_shared_memory
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,9 @@ class BaseAgent:
         self.config = config or AgentConfig.default_for(AgentType.BASE)
         self.name = self.config.name
         self._user_contexts: dict[str, UserContext] = {}
+        
+        # Shared memory (cross-agent knowledge)
+        self.shared_memory = get_shared_memory()
         
         # Load default API config from environment
         self._api_key = self.config.api_key or os.getenv("OMICS_LLM_API_KEY")
@@ -210,6 +214,18 @@ class BaseAgent:
             parts.append(f"\n[Recent History]\n{history_summary}")
         
         return "\n".join(parts)
+    
+    def get_shared_memory(self) -> SharedMemory:
+        """Get the shared memory instance"""
+        return self.shared_memory
+    
+    def get_task_memory(self, plan_id: str) -> TaskMemory:
+        """Get or create task-specific memory"""
+        if not hasattr(self, '_task_memories'):
+            self._task_memories = {}
+        if plan_id not in self._task_memories:
+            self._task_memories[plan_id] = TaskMemory(plan_id)
+        return self._task_memories[plan_id]
     
     def __repr__(self) -> str:
         return f"<BaseAgent: {self.name}>"

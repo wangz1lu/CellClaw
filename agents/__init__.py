@@ -33,6 +33,7 @@ from agents.wrapper import (
     disable_multi_agent
 )
 from agents.client import MultiAgentClient
+from agents.memory import SharedMemory, TaskMemory, get_shared_memory
 
 from agents.websocket_manager import (
     WebSocketManager,
@@ -58,6 +59,13 @@ __all__ = [
     "ExecutionPlan",
     "ServerInfo",
     "UserContext",
+    
+    # Memory (Cross-Agent Knowledge Sharing)
+    "SharedMemory",
+    "TaskMemory",
+    "KnowledgeEntry",
+    "SkillKnowledge",
+    "get_shared_memory",
     
     # Agents
     "OrchestratorAgent",
