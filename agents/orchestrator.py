@@ -232,8 +232,8 @@ Respond with ONLY the category word, nothing else."""
                 if session:
                     if session.active_project_path:
                         context_parts.append("当前工作目录: " + session.active_project_path)
-                    if session.active_env:
-                        context_parts.append("当前conda环境: " + session.active_env)
+                    if session.active_conda_env:
+                        context_parts.append("当前conda环境: " + session.active_conda_env)
                     if session.active_server_id:
                         context_parts.append("当前服务器: " + session.active_server_id)
             except Exception as e:
