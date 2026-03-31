@@ -311,24 +311,36 @@ class OrchestratorAgent:
     # ───────────────────────────────────────────────────────────────
 
     async def _handle_status(self, user_id: str) -> str:
-        """Handle status query - like original single agent."""
-        context = self._build_context(user_id)
+        """
+        Handle status query - REAL status from SSH registry.
+        """
+        parts = []
         
-        system_prompt = """你是一个专业的生物信息分析助手 CellClaw。
-
-用户请求查看当前状态。请根据以下上下文信息回答：
-
-{context}
-
-回答格式：
-- 当前服务器（如有）
-- 当前工作目录
-- 当前conda环境
-- 运行中的任务数量
-
-简洁明了地回答。"""
-
-        return system_prompt.format(context=context) if context != "无" else "暂无配置信息"
+        # Get real session info
+        if self._ssh_manager:
+            try:
+                session = self._ssh_manager._registry.get_session(user_id)
+                if session:
+                    if session.active_server_id:
+                        parts.append(f"当前服务器: {session.active_server_id}")
+                    if session.active_project_path:
+                        parts.append(f"当前工作目录: {session.active_project_path}")
+                    if session.active_conda_env:
+                        parts.append(f"当前conda环境: {session.active_conda_env}")
+            except Exception as e:
+                parts.append(f"获取状态失败: {e}")
+        
+        # Get active jobs
+        try:
+            jobs = self.executor.get_active_jobs(user_id)
+            if jobs:
+                parts.append(f"运行中的任务: {len(jobs)}")
+            else:
+                parts.append("运行中的任务: 无")
+        except:
+            pass
+        
+        return "\n".join(parts) if parts else "暂无配置信息"
 
     async def _handle_help(self, user_id: str) -> str:
         """Handle help request."""
@@ -354,9 +366,66 @@ class OrchestratorAgent:
         return system_prompt
 
     async def _handle_query(self, params: dict, user_id: str) -> str:
-        """Handle query - use LLM to answer from context."""
+        """
+        Handle query - try real execution first, then LLM.
+        """
         question = params.get("question", "")
-        context = self._build_context(user_id)
+        msg_lower = question.lower()
+        
+        # Try to execute real commands for specific queries
+        if not self._ssh_manager:
+            return await self._llm_query(question)
+        
+        # Get workdir
+        workdir = "~"
+        try:
+            session = self._ssh_manager._registry.get_session(user_id)
+            if session and session.active_project_path:
+                workdir = session.active_project_path
+        except:
+            pass
+        
+        # How many files in directory?
+        if "多少" in msg_lower and "文件" in msg_lower:
+            cmd = f"find {workdir} -type f | wc -l"
+            result = await self._ssh_manager.run(user_id, cmd)
+            if result.success:
+                return f"当前目录共有 {result.stdout.strip()} 个文件"
+        
+        # List files in directory?
+        if any(k in msg_lower for k in ["有什么", "列出", "查看", "ls"]):
+            cmd = f"ls -lah {workdir}"
+            result = await self._ssh_manager.run(user_id, cmd)
+            if result.success:
+                return "当前目录 (" + workdir + ") 内容:\n" + result.stdout
+        
+        # Check conda environments?
+        if "conda" in msg_lower and ("环境" in msg_lower or "env" in msg_lower):
+            cmd = "conda env list"
+            result = await self._ssh_manager.run(user_id, cmd)
+            if result.success:
+                return "Conda 环境:\n" + result.stdout
+        
+        # Check current directory / path?
+        if "当前" in msg_lower and ("目录" in msg_lower or "路径" in msg_lower or "工作" in msg_lower):
+            return f"当前工作目录: {workdir}"
+        
+        # Job status?
+        if "任务" in msg_lower or "job" in msg_lower:
+            jobs = self.executor.get_active_jobs(user_id)
+            if jobs:
+                lines = ["运行中的任务 (" + str(len(jobs)) + "):"]
+                for j in jobs:
+                    lines.append(f"- {j.description}: {j.status}")
+                return "\n".join(lines)
+            return "当前没有运行中的任务"
+        
+        # If no real command matched, use LLM
+        return await self._llm_query(question)
+
+    async def _llm_query(self, question: str) -> str:
+        """Fallback: use LLM to answer query from context."""
+        context = self._build_context("user")
         
         prompt = f"""用户问: {question}
 
@@ -377,38 +446,94 @@ class OrchestratorAgent:
         return "请告诉我脚本的完整路径和要修改的内容。"
 
     async def _handle_file_operation(self, params: dict, user_id: str) -> str:
-        """Handle file operations like mkdir."""
+        """Handle file operations - REAL execution via SSH."""
+        if not self._ssh_manager:
+            return "抱歉，未连接到服务器。请先配置服务器。"
+        
         operation = params.get("operation", "")
+        msg_lower = operation.lower()
         
-        # Extract the actual operation
-        if "新建" in operation or "创建" in operation or "mkdir" in operation.lower():
-            # Extract folder name
-            folder_match = re.search(r'[的新建创建]*([^\s]+)', operation.replace("文件夹", ""))
-            folder_name = folder_match.group(1) if folder_match else "test"
-            
-            # Get workdir from context
-            workdir = "~/"
-            if self._ssh_manager:
-                try:
-                    session = self._ssh_manager._registry.get_session(user_id)
-                    if session and session.active_project_path:
-                        workdir = session.active_project_path
-                except:
-                    pass
-            
-            # Submit the mkdir job
-            script = f"mkdir -p {workdir}/{folder_name}"
-            job_id = await self.executor.submit(
-                script_path=None,  # Will use shell command
-                user_id=user_id,
-                channel_id=None,
-                description=f"创建文件夹 {folder_name}",
-                skill_used=None
-            )
-            
-            return f"正在创建文件夹 {folder_name} 在 {workdir}..."
+        # Get workdir from session
+        workdir = "~"
+        try:
+            session = self._ssh_manager._registry.get_session(user_id)
+            if session and session.active_project_path:
+                workdir = session.active_project_path
+        except:
+            pass
         
-        return "请告诉我要执行什么文件操作？"
+        # mkdir - create folder
+        if "新建" in operation or "创建" in operation or "mkdir" in msg_lower:
+            folder_name = self._extract_folder_name(operation)
+            target_path = f"{workdir}/{folder_name}"
+            cmd = f"mkdir -p {target_path}"
+            
+            result = await self._ssh_manager.run(user_id, cmd)
+            if result.success:
+                return f"已创建文件夹: {target_path}"
+            else:
+                return f"创建失败: {result.stderr or result.error}"
+        
+        # rm - delete file/folder
+        if "删除" in operation or "rm " in msg_lower:
+            target = self._extract_target(operation, workdir)
+            cmd = f"rm -rf {target}"
+            
+            result = await self._ssh_manager.run(user_id, cmd)
+            if result.success:
+                return f"已删除: {target}"
+            else:
+                return f"删除失败: {result.stderr or result.error}"
+        
+        # ls - list directory
+        if "查看" in operation or "ls" in msg_lower or "列出" in operation:
+            target = self._extract_target(operation, workdir)
+            cmd = f"ls -lah {target}"
+            
+            result = await self._ssh_manager.run(user_id, cmd)
+            if result.success:
+                return "目录内容 (" + target + "):\n" + result.stdout
+            else:
+                return f"查看失败: {result.stderr or result.error}"
+        
+        # cd - change directory / set workdir
+        if "切换" in operation or "cd " in msg_lower:
+            new_workdir = self._extract_target(operation, workdir)
+            
+            # Update session workdir
+            try:
+                self._ssh_manager._registry.set_workdir(user_id, new_workdir)
+                return f"已切换到目录: {new_workdir}"
+            except Exception as e:
+                return f"切换失败: {e}"
+        
+        return f"支持的操作: 新建文件夹, 删除, 查看目录内容, 切换目录"
+
+    def _extract_folder_name(self, operation: str) -> str:
+        """Extract folder name from operation text."""
+        # 匹配 "新建文件夹test" 或 "创建test文件夹" 或 "mkdir test"
+        patterns = [
+            r'[新建设建]*文件夹 ?([^\s]+)',
+            r'[新建设建]* ?([^\s]+) ?文件夹',
+            r'mkdir\s+([^\s]+)',
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, operation)
+            if match:
+                return match.group(1).strip()
+        return "untitled"
+
+    def _extract_target(self, operation: str, default: str) -> str:
+        """Extract target path from operation."""
+        patterns = [
+            r'到(.+?)(?:$|\s)',  # "到/path/to"
+            r'[/~][^\s]+',  # /path/to or ~/path/to
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, operation)
+            if match:
+                return match.group(1).strip()
+        return default
 
     async def _handle_analyze(self, params: dict, user_id: str) -> str:
         """
