@@ -285,29 +285,8 @@ class OrchestratorAgent:
         intent = self._classify_intent(message, user_id)
         logger.info(f"Action: {intent['action']}")
 
-        # Route to appropriate handler
-        if intent["action"] == "status":
-            response = await self._handle_status(user_id)
-        elif intent["action"] == "help":
-            response = await self._handle_help(user_id)
-        elif intent["action"] == "read_script":
-            response = await self._handle_read_script(intent["params"], user_id)
-        elif intent["action"] == "modify_script":
-            response = await self._handle_modify_script(intent["params"], user_id)
-        elif intent["action"] == "file_operation":
-            response = await self._handle_file_operation(intent["params"], user_id)
-        elif intent["action"] == "query":
-            response = await self._handle_query(intent["params"], user_id)
-        elif intent["action"] == "analyze":
-            response = await self._handle_analyze(intent["params"], user_id)
-        elif intent["action"] == "full_pipeline":
-            response = await self._handle_full_pipeline(intent["params"], user_id)
-        elif intent["action"] == "conversation":
-            response = await self._llm_chat(message, user_id)
-        elif intent["action"] == "llm_chat":
-            response = await self._llm_chat(intent["params"]["message"], user_id)
-        else:
-            response = await self._llm_chat(message, user_id)
+        # LLM decides what to do - use context to be smart
+        response = await self._llm_chat(message, user_id)
 
         self.base.add_to_history(user_id, "assistant", response)
         return response
@@ -612,40 +591,39 @@ class OrchestratorAgent:
 
     async def _llm_chat(self, message: str, user_id: str) -> str:
         """
-        LLM chat - knows identity like original single agent.
+        LLM chat - uses intelligence to understand user needs.
         """
         context = self._build_context(user_id)
-        
-        system_prompt = (
-            "你是一个专业的生物信息分析助手，名叫 CellClaw。\n\n"
-            "你的身份和能力：\n"
-            "- 你可以通过SSH连接用户的服务器\n"
-            "- 你可以执行数据分析任务\n"
-            "- 你可以读写文件、管理文件夹\n"
-            "- 你知道用户的服务器、工作目录、conda环境配置\n\n"
-            "当前用户环境：\n"
-            "{context}\n\n"
-            "你应该：\n"
-            "- 专业、友好、乐于助人\n"
-            "- 用用户语言交流（中文或英文）\n"
-            "- 直接回答用户问题\n"
-            "- 主动提供帮助\n"
-        )
-        
-        response = await self._call_llm(message, system=system_prompt.format(context=context))
-        
-        if response:
-            return response
-        
-        # Fallback
         msg_lower = message.lower()
+        
+        # Direct simple responses
         if any(g in msg_lower for g in ["你好", "hi", "hello", "嗨", "在吗"]):
             return "你好！我是 CellClaw，你的生物信息分析助手。有什么可以帮你的？"
         if "谢谢" in msg_lower:
             return "不客气！有问题随时问我。"
         if "再见" in msg_lower or "拜拜" in msg_lower:
             return "再见！"
-        return "抱歉，我现在无法回答。请稍后重试。"
+        if "你是谁" in msg_lower or "who are you" in msg_lower:
+            return "我是 CellClaw，一个专注于生物信息学分析的 AI 助手。我可以帮你做单细胞分析、数据下载、脚本编写等。"
+        
+        # Use LLM to understand what user needs and respond
+        prompt = (
+            "用户: " + message + "\n\n" +
+            "当前环境: " + context + "\n\n" +
+            "分析用户需求并回应：\n" +
+            "- 如果用户要创建/编写/生成脚本/代码 -> 说'好的，我来帮你写一个XXX脚本'\n" +
+            "- 如果用户要执行分析/任务 -> 说'好的，我来帮你执行XXX分析'\n" +
+            "- 如果用户问信息问题 -> 给出答案\n" +
+            "- 其他 -> 简洁回应\n" +
+            "直接回应用户，简洁明确。"
+        )
+        
+        response = await self._call_llm(prompt)
+        
+        if response:
+            return response
+        
+        return "我明白了。请问要执行吗？"
 
     # ───────────────────────────────────────────────────────────────
     # Executor Event Handler
