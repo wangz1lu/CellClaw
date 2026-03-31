@@ -43,7 +43,7 @@ try:
     MULTI_AGENT_AVAILABLE = True
 except ImportError:
     MULTI_AGENT_AVAILABLE = False
-    logger.warning("Multi-Agent system not available")
+    print("Multi-Agent system not available, using single agent mode")
 
 logger = logging.getLogger(__name__)
 
