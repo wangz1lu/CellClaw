@@ -343,10 +343,11 @@ class OrchestratorAgent:
 
     async def _handle_query(self, params: dict, user_id: str) -> str:
         """
-        Handle data query - REAL execution like original NL Router.
+        Handle data query - NEVER fabricate critical info.
+        Only return REAL data from SSH registry. If unknown, say so.
         """
         if not self._ssh_manager:
-            return await self._llm_query(params.get("question", ""))
+            return "抱歉，未连接到服务器。请先配置服务器。"
         
         question = params.get("question", "")
         msg_lower = question.lower()
@@ -383,18 +384,21 @@ class OrchestratorAgent:
             if result and result.success:
                 return "Conda 环境:\n" + result.stdout
         
-        # Current directory - check REAL workdir from registry
+        # Current directory - MUST get REAL workdir from registry
         if ("当前" in msg_lower or "目前" in msg_lower) and ("目录" in msg_lower or "路径" in msg_lower or "项目" in msg_lower or "工作" in msg_lower):
-            # Try to get REAL workdir from registry
             if self._ssh_manager:
                 try:
                     session = self._ssh_manager._registry.get_session(user_id)
                     real_workdir = session.active_project_path if session else None
                     if real_workdir:
-                        return "当前项目目录: " + real_workdir
+                        return "当前工作目录: " + real_workdir
                 except:
                     pass
-            return "当前工作目录: " + workdir
+            # NEVER fabricate - if we don't know, say so
+            return "暂未设置工作目录，请先用 /project set <路径> 设置"
+
+        # Default: NEVER fabricate, use LLM only for non-critical info
+        return await self._llm_query(question, require_real_data=False)
         
         # Jobs status
         if "任务" in msg_lower or "job" in msg_lower:
@@ -418,10 +422,36 @@ class OrchestratorAgent:
                 return m.group(1)
         return default
 
-    async def _llm_query(self, question: str) -> str:
-        """Use LLM to answer query from context."""
+    async def _llm_query(self, question: str, require_real_data: bool = True) -> str:
+        """
+        Use LLM to answer query - but NEVER fabricate critical server info.
+        """
+        msg_lower = question.lower()
+        
+        # Check if asking about CRITICAL info (server/workdir/conda)
+        critical_keywords = ["目录", "路径", "工作", "项目", "服务器", "conda", "环境", "server"]
+        if require_real_data and any(k in msg_lower for k in critical_keywords):
+            # This is critical info - we should have it or say we don't
+            if self._ssh_manager:
+                try:
+                    session = self._ssh_manager._registry.get_session(user_id)
+                    if session:
+                        parts = []
+                        if session.active_project_path:
+                            parts.append("工作目录: " + session.active_project_path)
+                        if session.active_server_id:
+                            parts.append("服务器: " + session.active_server_id)
+                        if session.active_conda_env:
+                            parts.append("Conda环境: " + session.active_conda_env)
+                        if parts:
+                            return "\n".join(parts)
+                except:
+                    pass
+            return "抱歉，我无法获取该信息。请确认已连接服务器并设置工作目录。"
+        
+        # Non-critical info - can use LLM
         context = self._build_context("user")
-        prompt = "用户问: " + question + "\n\n当前用户环境:\n" + context + "\n\n请直接回答用户问题。"
+        prompt = "用户问: " + question + "\n\n当前用户环境:\n" + context + "\n\n请直接简洁回答用户问题。"
         response = await self._call_llm(prompt, system="你是生物信息分析助手，直接简洁回答用户问题。")
         return response if response else "抱歉，我无法回答这个问题。"
 
