@@ -266,6 +266,8 @@ class OrchestratorAgent:
             return "visualization"
         if any(k in msg_lower for k in ["sce", "seurat", "scanpy", "单细胞", "scrna", "snrna"]):
             return "single_cell"
+        if any(k in msg_lower for k in ["下载", "download", "获取数据", "抓取"]):
+            return "download"
         return None
 
     # ───────────────────────────────────────────────────────────────
@@ -591,7 +593,8 @@ class OrchestratorAgent:
 
     async def _llm_chat(self, message: str, user_id: str) -> str:
         """
-        LLM chat - knows when to answer directly vs when to plan tasks.
+        LLM chat - decides whether to execute task or just talk.
+        When user confirms a task, it actually executes it.
         """
         msg_lower = message.lower()
         
@@ -612,20 +615,36 @@ class OrchestratorAgent:
                 return "当前环境信息：\n" + context
             return "暂无环境信息。请先配置服务器和工作目录。"
         
-        # For task requests - use LLM to understand
-        if any(k in msg_lower for k in ["帮我", "生成", "编写", "创建", "执行", "做", "跑"]):
-            prompt = ("用户: " + message + "  判断用户想要什么任务，用一句话确认。")
-            response = await self._call_llm(prompt)
-            if response:
-                return response
+        # Check if user confirmed a previous request
+        if any(k in msg_lower for k in ["好的", "是", "是的", "执行", "开始", "go", "do it", "确认"]):
+            # User confirmed - check if we have a pending task to execute
+            # This is where we should execute the actual task
+            # For now, route to execute a general task
+            return await self._execute_task_from_message(user_id, message)
         
-        # Default - use LLM
+        # If user says "帮我..." - execute it directly
+        if any(k in msg_lower for k in ["帮我", "生成", "编写", "创建", "执行", "做", "跑", "下载"]):
+            return await self._execute_task_from_message(user_id, message)
+        
+        # Default - use LLM to respond
         prompt = ("用户: " + message + "  请简洁回应用户。")
         response = await self._call_llm(prompt)
         if response:
             return response
         
         return "我明白了。请问要帮你做什么？"
+
+    async def _execute_task_from_message(self, user_id: str, message: str) -> str:
+        """
+        Execute a task based on user message.
+        This routes to the multi-agent flow for actual execution.
+        """
+        # Route to analyze handler which will use Planner -> Coder -> Reviewer -> Executor
+        params = {
+            "question": message,
+            "analysis_type": "download"  # Treat download as a task
+        }
+        return await self._handle_analyze(params, user_id)
 
     # ───────────────────────────────────────────────────────────────
     # Executor Event Handler
