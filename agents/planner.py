@@ -38,10 +38,10 @@ class PlannerAgent:
         "你是谁", "what can you do", "有什么用"
     ]
     
-    def __init__(self, config: AgentConfig = None, shared_memory=None):
+    def __init__(self, config: AgentConfig = None, shared_memory=None, ssh_manager=None):
         self.config = config or AgentConfig.default_for(AgentType.PLANNER)
         self.name = self.config.name
-        self.base = BaseAgent()
+        self.base = BaseAgent(ssh_manager=ssh_manager)
         
         # Shared memory for cross-agent knowledge
         self.shared_memory = shared_memory

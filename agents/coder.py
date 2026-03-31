@@ -128,10 +128,10 @@ cat("Harmony batch correction complete.\\n")
         }
     }
     
-    def __init__(self, config: AgentConfig = None, shared_memory=None):
+    def __init__(self, config: AgentConfig = None, shared_memory=None, ssh_manager=None):
         self.config = config or AgentConfig.default_for(AgentType.CODER)
         self.name = self.config.name
-        self.base = BaseAgent()
+        self.base = BaseAgent(ssh_manager=ssh_manager)
         
         # Shared memory for cross-agent knowledge
         self.shared_memory = shared_memory

@@ -33,10 +33,13 @@ class BaseAgent:
     - User contexts
     """
     
-    def __init__(self, config: AgentConfig = None):
+    def __init__(self, config: AgentConfig = None, ssh_manager=None):
         self.config = config or AgentConfig.default_for(AgentType.BASE)
         self.name = self.config.name
         self._user_contexts: dict[str, UserContext] = {}
+        
+        # SSH Manager for real context
+        self._ssh_manager = ssh_manager
         
         # Shared memory (cross-agent knowledge)
         self.shared_memory = get_shared_memory()
@@ -235,5 +238,35 @@ class BaseAgent:
             self._task_memories[plan_id] = TaskMemory(plan_id)
         return self._task_memories[plan_id]
     
+    def get_workdir(self, user_id: str) -> Optional[str]:
+        """Get user's work directory from SSH registry"""
+        if self._ssh_manager:
+            try:
+                session = self._ssh_manager._registry.get_session(user_id)
+                return session.active_project_path if session else None
+            except:
+                pass
+        return None
+
+    def get_conda_env(self, user_id: str) -> Optional[str]:
+        """Get user's conda environment from SSH registry"""
+        if self._ssh_manager:
+            try:
+                session = self._ssh_manager._registry.get_session(user_id)
+                return session.active_conda_env if session else None
+            except:
+                pass
+        return None
+
+    def get_server(self, user_id: str) -> Optional[str]:
+        """Get user's active server from SSH registry"""
+        if self._ssh_manager:
+            try:
+                session = self._ssh_manager._registry.get_session(user_id)
+                return session.active_server_id if session else None
+            except:
+                pass
+        return None
+
     def __repr__(self) -> str:
         return f"<BaseAgent: {self.name}>"

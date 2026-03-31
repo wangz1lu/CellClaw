@@ -62,9 +62,10 @@ class OrchestratorAgent:
         # Shared memory
         self.shared_memory = get_shared_memory()
         
-        self.planner = PlannerAgent(shared_memory=self.shared_memory)
-        self.coder = CoderAgent(shared_memory=self.shared_memory)
-        self.reviewer = ReviewerAgent(shared_memory=self.shared_memory)
+        # All agents get ssh_manager for real context
+        self.planner = PlannerAgent(shared_memory=self.shared_memory, ssh_manager=None)
+        self.coder = CoderAgent(shared_memory=self.shared_memory, ssh_manager=None)
+        self.reviewer = ReviewerAgent(shared_memory=self.shared_memory, ssh_manager=None)
 
         # Executor for job submission
         from agents.executor import ExecutorAgent
@@ -89,8 +90,16 @@ class OrchestratorAgent:
         self.executor.set_user_notify_callback(callback)
 
     def set_ssh_manager(self, ssh_manager):
-        """Set SSH manager for real server data"""
+        """Set SSH manager for real server data - propagates to all agents"""
         self._ssh_manager = ssh_manager
+        # Propagate to all internal agents
+        if hasattr(self, 'planner'):
+            self.planner.base._ssh_manager = ssh_manager
+        if hasattr(self, 'coder'):
+            self.coder.base._ssh_manager = ssh_manager
+        if hasattr(self, 'reviewer'):
+            self.reviewer.base._ssh_manager = ssh_manager
+        logger.info("SSH manager propagated to all agents")
 
     def set_job_tracker(self, job_tracker):
         """Set job tracker for real job data"""

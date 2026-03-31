@@ -58,10 +58,10 @@ class ReviewerAgent:
     # Common path patterns that need validation
     REQUIRED_PATH_VARS = ["input_file", "output_file", "workdir", "data_dir"]
     
-    def __init__(self, config: AgentConfig = None, shared_memory=None):
+    def __init__(self, config: AgentConfig = None, shared_memory=None, ssh_manager=None):
         self.config = config or AgentConfig.default_for(AgentType.REVIEWER)
         self.name = self.config.name
-        self.base = BaseAgent()
+        self.base = BaseAgent(ssh_manager=ssh_manager)
         
         # Shared memory for cross-agent knowledge
         self.shared_memory = shared_memory
