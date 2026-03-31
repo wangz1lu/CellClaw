@@ -111,6 +111,46 @@ class PlannerAgent:
     # Intent Understanding
     # ───────────────────────────────────────────────────────────────
     
+    async def _call_llm(self, prompt: str) -> str:
+        """Call LLM API."""
+        import aiohttp
+        import os
+        
+        api_key = os.getenv("OMICS_LLM_API_KEY")
+        base_url = os.getenv("OMICS_LLM_BASE_URL", "https://api.deepseek.com/v1")
+        model = os.getenv("OMICS_LLM_MODEL", "deepseek-chat")
+        
+        if not api_key:
+            logger.warning("No LLM API key configured")
+            return None
+        
+        payload = {
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.3,
+        }
+        
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{base_url}/chat/completions",
+                    json=payload,
+                    headers=headers,
+                    timeout=aiohttp.ClientTimeout(total=30)
+                ) as resp:
+                    if resp.status != 200:
+                        return None
+                    result = await resp.json()
+                    return result["choices"][0]["message"]["content"]
+        except Exception as e:
+            logger.error(f"LLM call failed: {e}")
+            return None
+
     async def understand(self, message: str, user_id: str) -> Intent:
         """
         Understand user intent from message.
