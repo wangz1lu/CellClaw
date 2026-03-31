@@ -1,248 +1,158 @@
 """
-CoderAgent - Code Generation
-===========================
+CoderAgent - Code Generation with LLM
+===================================
 
-Generates R/Python code based on task requirements.
-Integrates with Skill knowledge bases.
+Uses LLM to:
+1. Generate complete, executable code
+2. Use Skills as templates when available
+3. Save code to SSH workdir
 """
 
 from __future__ import annotations
 import os
+import re
 import logging
-from typing import Optional, Callable
-from dataclasses import dataclass
+import asyncio
+from typing import Optional
 
 from agents.base import BaseAgent
-from agents.models import AgentConfig, AgentType, TaskStep
+from agents.models import AgentConfig, AgentType, CodeResult
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class CodeResult:
-    """Result of code generation"""
-    code: str
-    language: str  # "R" or "Python"
-    script_path: Optional[str] = None
-    issues: list[str] = None  # Warnings or problems detected
-    skill_used: Optional[str] = None
-    
-    def __post_init__(self):
-        if self.issues is None:
-            self.issues = []
-
-
 class CoderAgent:
     """
-    CoderAgent generates executable code for bioinformatics tasks.
-    
-    Responsibilities:
-    - Generate R/Python scripts
-    - Integrate with Skill knowledge bases
-    - Handle script file creation
-    - Validate generated code
+    CoderAgent - Generates executable code using LLM.
+
+    Uses LLM to:
+    - Write complete code from task description
+    - Use Skills as reference templates
+    - Save code to SSH workdir
     """
-    
-    # Skill to template mapping
-    SKILL_TEMPLATES = {
-        "deg_analysis": {
-            "R": """# DEG Analysis Template
-library(Seurat)
-library(dplyr)
 
-# Load data
-data <- ReadRDS("{input_file}")
-DefaultAssay(data) <- "RNA"
-
-# Find markers
-markers <- FindAllMarkers(
-    object = data,
-    only.pos = TRUE,
-    min.pct = 0.25,
-    thresh.use = 0.25
-)
-
-# Save results
-write.csv(markers, "{output_file}", row.names = FALSE)
-cat("DEG analysis complete. Found", nrow(markers), "markers.\\n")
-""",
-            "Python": """# DEG Analysis Template
-import scanpy as sc
-import pandas as pd
-
-# Load data
-adata = sc.read_h5ad("{input_file}")
-
-# Find markers
-sc.tl.rank_genes_groups(adata, groupby="{groupby}", method="t-test")
-result = adata.uns["rank_genes_groups"]
-markers = pd.DataFrame(result["names"]).head(100)
-
-# Save results
-markers.to_csv("{output_file}", index=False)
-print(f"DEG analysis complete. Found {len(markers)} markers.")
-"""
-        },
-        "visualization_R": {
-            "R": """# Visualization Template
-library(Seurat)
-library(ggplot2)
-
-# Load data
-data <- ReadRDS("{input_file}")
-
-# UMAP visualization
-p1 <- DimPlot(data, reduction = "umap", label = TRUE)
-p2 <- FeaturePlot(data, features = c("{feature}"))
-
-# Combine plots
-combined <- p1 + p2
-ggsave("{output_file}", combined, width = 12, height = 6)
-cat("Visualization saved to {output_file}\\n")
-"""
-        },
-        "batch_harmony": {
-            "R": """# Batch Correction with Harmony
-library(Seurat)
-library(harmony)
-
-# Load data
-data <- ReadRDS("{input_file}")
-data <- NormalizeData(data)
-
-# Variable features
-data <- FindVariableFeatures(data, nfeatures = 2000)
-data <- ScaleData(data)
-
-# Run PCA
-data <- RunPCA(data, npcs = 30)
-
-# Harmony integration
-data <- RunHarmony(data, group.by.vars = "{batch_var}")
-data <- RunUMAP(data, reduction = "harmony", dims = 1:30)
-
-# Save
-saveRDS(data, "{output_file}")
-cat("Harmony batch correction complete.\\n")
-"""
-        }
-    }
-    
     def __init__(self, config: AgentConfig = None, shared_memory=None, ssh_manager=None):
         self.config = config or AgentConfig.default_for(AgentType.CODER)
         self.name = self.config.name
         self.base = BaseAgent(ssh_manager=ssh_manager)
-        
-        # Shared memory for cross-agent knowledge
         self.shared_memory = shared_memory
         
-        # API config
-        self._api_key = self.config.api_key or os.getenv("CODER_API_KEY") or os.getenv("OMICS_LLM_API_KEY")
-        self._base_url = self.config.base_url or os.getenv("OMICS_LLM_BASE_URL", "https://api.deepseek.com/v1")
-        self._model = self.config.model or os.getenv("CODER_MODEL") or os.getenv("OMICS_LLM_MODEL", "deepseek-chat")
+        # LLM config
+        self._api_key = os.getenv("OMICS_LLM_API_KEY")
+        self._base_url = os.getenv("OMICS_LLM_BASE_URL", "https://api.deepseek.com/v1")
+        self._model = os.getenv("OMICS_LLM_MODEL", "deepseek-chat")
         
-        # Script directory
-        self._script_dir = "/tmp/cellclaw_scripts"
-        os.makedirs(self._script_dir, exist_ok=True)
-    
-    # ───────────────────────────────────────────────────────────────
-    # Code Generation
-    # ───────────────────────────────────────────────────────────────
-    
-    async def generate(self, task_description: str, skill_id: str = None, 
-                     language: str = "R", context: dict = None) -> CodeResult:
+        # Skills
+        self._skills = self._load_skills()
+
+    def _load_skills(self) -> dict:
+        """Load available skills from skills directory."""
+        skills = {}
+        skills_dir = os.path.join(os.path.dirname(__file__), '..', 'skills')
+        
+        if os.path.exists(skills_dir):
+            for skill_id in os.listdir(skills_dir):
+                skill_path = os.path.join(skills_dir, skill_id)
+                if os.path.isdir(skill_path):
+                    # Try to read skill metadata
+                    meta_path = os.path.join(skill_path, 'SKILL.md')
+                    description = skill_id
+                    template = ""
+                    
+                    if os.path.exists(meta_path):
+                        with open(meta_path, 'r') as f:
+                            content = f.read()
+                            # Extract description from first heading
+                            match = re.search(r'^#\s+(.+)$', content, re.MULTILINE)
+                            if match:
+                                description = match.group(1)
+                    
+                    skills[skill_id] = {
+                        'id': skill_id,
+                        'description': description,
+                        'path': skill_path
+                    }
+        
+        logger.info(f"Coder: Loaded {len(skills)} skills: {list(skills.keys())}")
+        return skills
+
+    async def _call_llm(self, prompt: str) -> str:
+        """Call LLM API."""
+        import aiohttp
+        
+        payload = {
+            "model": self._model,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.3,
+        }
+        
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{self._base_url}/chat/completions",
+                    json=payload,
+                    headers=headers,
+                    timeout=aiohttp.ClientTimeout(total=120)
+                ) as resp:
+                    if resp.status != 200:
+                        error = await resp.text()
+                        logger.error(f"LLM API error: {resp.status} - {error}")
+                        return None
+                    
+                    result = await resp.json()
+                    return result["choices"][0]["message"]["content"]
+        except Exception as e:
+            logger.error(f"LLM API error: {e}")
+            return None
+
+    async def generate(self, task_description: str, skill_id: str = None, language: str = "R") -> CodeResult:
         """
-        Generate code for a task.
+        Generate executable code for the task.
         
         Args:
             task_description: What the code should do
-            skill_id: Skill to use (uses template if provided)
+            skill_id: Optional skill to use as template
             language: "R" or "Python"
-            context: Additional context (input_file, output_file, etc.)
             
         Returns:
             CodeResult with generated code
         """
-        context = context or {}
+        logger.info(f"Coder: Generating {language} code for: {task_description[:50]}...")
         
-        # Check for skill template first
-        if skill_id and skill_id in self.SKILL_TEMPLATES:
-            code = await self._generate_from_skill(skill_id, language, context)
+        # Get context
+        workdir = self.base.get_workdir("user") or "~/cellclaw_jobs"
+        
+        # Build prompt for LLM
+        prompt = self._build_code_prompt(task_description, skill_id, language, workdir)
+        
+        # Call LLM
+        response = await self._call_llm(prompt)
+        
+        if not response:
+            logger.error("Coder: LLM returned empty response")
             return CodeResult(
-                code=code,
+                code=f"# ERROR: Failed to generate code for: {task_description}",
                 language=language,
-                skill_used=skill_id,
+                skill_used=skill_id
             )
         
-        # Generate from scratch using task description
-        code = await self._generate_from_description(task_description, language, context)
+        # Extract code
+        code = self._extract_code(response, language)
         
-        return CodeResult(code=code, language=language)
-    
-    async def _generate_from_skill(self, skill_id: str, language: str, 
-                                  context: dict) -> str:
-        """Generate code from skill template"""
-        template = self.SKILL_TEMPLATES.get(skill_id, {}).get(language)
-        
-        if not template:
-            logger.warning(f"No template for {skill_id}/{language}, using description generation")
-            return await self._generate_from_description(f"Use {skill_id}", language, context)
-        
-        # Fill in template
-        code = template.format(
-            input_file=context.get("input_file", "/path/to/input.h5ad"),
-            output_file=context.get("output_file", "/path/to/output.csv"),
-            feature=context.get("feature", "marker_gene"),
-            groupby=context.get("groupby", "cell_type"),
-            batch_var=context.get("batch_var", "batch"),
-        )
-        
-        logger.info(f"Generated code from skill template: {skill_id}")
-        
-        return code
-    
-    async def _generate_from_description(self, task_description: str, 
-                                        language: str, context: dict) -> str:
-        """Generate code from task description using LLM"""
-        # Check shared memory for similar successful codes
-        if self.shared_memory:
-            relevant_codes = self.shared_memory.get_relevant(
-                task_description, category="code", limit=3
+        if not code or len(code) < 50:
+            logger.error(f"Coder: Generated code too short: {code[:100] if code else 'None'}")
+            return CodeResult(
+                code=f"# ERROR: Failed to generate valid code for: {task_description}",
+                language=language,
+                skill_used=skill_id
             )
-            for entry in relevant_codes:
-                logger.info(f"Coder: Found relevant code from {entry.agent}: {entry.id}")
-        # For now, return a placeholder
         
-        if language == "R":
-            code = f"""# Auto-generated code for: {task_description}
-# TODO: Implement based on task
-
-# Load library
-library(Seurat)
-
-# Your code here
-print("Task: {task_description}")
-"""
-        else:
-            code = f'''# Auto-generated code for: {task_description}
-# TODO: Implement based on task
-
-import scanpy as sc
-
-# Your code here
-print("Task: {task_description}")
-'''
-        
-        logger.info(f"Generated placeholder code for task: {task_description[:50]}")
-        
-        return code
-    
-    # ───────────────────────────────────────────────────────────────
-    # Script File Management
-    # ───────────────────────────────────────────────────────────────
-    
-    async def save_code_to_memory(self, code: str, skill_id: str = None, language: str = "R"):
-        """Save generated code to shared memory for future reference"""
+        # Save to shared memory
         if self.shared_memory and skill_id:
             self.shared_memory.add_code_template(
                 agent="coder",
@@ -250,22 +160,77 @@ print("Task: {task_description}")
                 code=code,
                 language=language
             )
-            logger.info(f"Coder: Saved code to shared memory for skill {skill_id}")
-    
-    async def save_script(self, code: str, language: str, 
-                         filename: str = None, user_id: str = None) -> str:
-        """
-        Save generated code to workdir on remote server.
         
-        Args:
-            code: The code to save
-            language: "R" or "Python"
-            filename: Optional custom filename
-            user_id: User ID to get workdir from SSH manager
-            
-        Returns:
-            Remote path to saved script on server
-        """
+        logger.info(f"Coder: Generated {len(code)} chars of {language} code")
+        
+        return CodeResult(
+            code=code,
+            language=language,
+            skill_used=skill_id
+        )
+
+    def _build_code_prompt(self, task: str, skill_id: str, language: str, workdir: str) -> str:
+        """Build prompt for code generation."""
+        
+        prompt = f"""生成完整的{language}代码来完成以下生物信息学任务：
+
+任务: {task}
+工作目录: {workdir}
+语言: {language}
+
+"""
+        
+        # Add skill context if available
+        if skill_id and skill_id in self._skills:
+            skill = self._skills[skill_id]
+            prompt += f"\n参考技能: {skill['id']} - {skill['description']}\n"
+        
+        prompt += """
+要求：
+1. 代码要完整可运行，不要省略任何部分
+2. 使用真实可用的函数和包
+3. 添加适当的注释
+4. 设置合理的工作目录
+5. 输出结果要有清晰的命名和路径
+
+只返回代码，不要其他解释。
+"""
+        
+        return prompt
+
+    def _extract_code(self, response: str, language: str) -> str:
+        """Extract code from LLM response."""
+        
+        # Try markdown code blocks
+        patterns = [
+            rf'```(?:{language})?\n(.*?)```',
+            rf'```\n(.*?)```',
+        ]
+        
+        for pattern in patterns:
+            matches = re.findall(pattern, response, re.DOTALL)
+            if matches:
+                return matches[0].strip()
+        
+        # If no markdown, try to find code-like content
+        lines = response.split('\n')
+        code_lines = []
+        in_code = False
+        
+        for line in lines:
+            if line.strip().startswith(('library(', 'require(', 'import ', 'def ', 'function(', '#', '//')):
+                in_code = True
+            if in_code:
+                code_lines.append(line)
+        
+        if code_lines:
+            return '\n'.join(code_lines)
+        
+        # Return as-is if nothing else worked
+        return response.strip()
+
+    async def save_script(self, code: str, language: str, filename: str = None, user_id: str = None) -> str:
+        """Save code to file."""
         import time
         import secrets
         
@@ -274,75 +239,17 @@ print("Task: {task_description}")
             ext = ".R" if language == "R" else ".py"
             filename = f"cellclaw_{prefix}{ext}"
         
-        # Try to get workdir from SSH manager
-        workdir = "~/cellclaw_jobs"
-        if user_id and self.shared_memory:
-            # Try to get from base's ssh_manager if available
-            pass
+        # Save locally
+        local_dir = "/tmp/cellclaw_scripts"
+        os.makedirs(local_dir, exist_ok=True)
+        local_path = os.path.join(local_dir, filename)
         
-        # Save locally first, then Executor will handle remote upload
-        local_path = os.path.join(self._script_dir, filename)
-        os.makedirs(self._script_dir, exist_ok=True)
-        
-        with open(local_path, "w") as f:
+        with open(local_path, 'w') as f:
             f.write(code)
         
-        logger.info(f"Saved script locally to {local_path}")
+        logger.info(f"Coder: Script saved to {local_path}")
         
-        # Return both local and suggested remote path
-        remote_path = f"{workdir}/{filename}"
-        
-        # Store the code content for Executor to use
-        self._last_script = {
-            "code": code,
-            "language": language,
-            "filename": filename,
-            "local_path": local_path,
-            "remote_path": remote_path
-        }
-        
-        return remote_path  # Return remote path
-        
-        return filepath
-    
-    async def fix(self, code: str, issues: list[str]) -> str:
-        """
-        Fix code based on review issues.
-        
-        Args:
-            code: Original code
-            issues: List of issues to fix
-            
-        Returns:
-            Fixed code
-        """
-        # TODO: Use LLM to fix issues
-        # For now, just log
-        
-        logger.info(f"Fixing {len(issues)} issues in code")
-        
-        for issue in issues:
-            logger.info(f"  - {issue}")
-        
-        # Simple fixes could be applied here
-        # For now, return as-is
-        return code
-    
-    # ───────────────────────────────────────────────────────────────
-    # Skill Integration
-    # ───────────────────────────────────────────────────────────────
-    
-    def get_available_skills(self) -> list[str]:
-        """Get list of skills with code templates"""
-        return list(self.SKILL_TEMPLATES.keys())
-    
-    def has_skill_template(self, skill_id: str, language: str) -> bool:
-        """Check if skill has a template for given language"""
-        return skill_id in self.SKILL_TEMPLATES and language in self.SKILL_TEMPLATES[skill_id]
-    
-    def get_skill_template(self, skill_id: str, language: str) -> str:
-        """Get skill template for given language"""
-        return self.SKILL_TEMPLATES.get(skill_id, {}).get(language, "")
-    
+        return local_path
+
     def __repr__(self) -> str:
-        return f"<CoderAgent: {self.name}>"
+        return f"<CoderAgent: {self.name}, skills={len(self._skills)}>"
