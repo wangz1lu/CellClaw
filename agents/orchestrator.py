@@ -381,8 +381,17 @@ class OrchestratorAgent:
             if result and result.success:
                 return "Conda 环境:\n" + result.stdout
         
-        # Current directory
-        if "当前" in msg_lower and ("目录" in msg_lower or "路径" in msg_lower or "工作" in msg_lower):
+        # Current directory - check REAL workdir from registry
+        if ("当前" in msg_lower or "目前" in msg_lower) and ("目录" in msg_lower or "路径" in msg_lower or "项目" in msg_lower or "工作" in msg_lower):
+            # Try to get REAL workdir from registry
+            if self._ssh_manager:
+                try:
+                    session = self._ssh_manager._registry.get_session(user_id)
+                    real_workdir = session.active_project_path if session else None
+                    if real_workdir:
+                        return "当前项目目录: " + real_workdir
+                except:
+                    pass
             return "当前工作目录: " + workdir
         
         # Jobs status
