@@ -615,15 +615,8 @@ class OrchestratorAgent:
                 return "当前环境信息：\n" + context
             return "暂无环境信息。请先配置服务器和工作目录。"
         
-        # Check if user confirmed - only execute if it's a clear task request
-        if any(k in msg_lower for k in ["好的", "是", "是的", "执行", "开始", "确认"]):
-            return await self._execute_task_from_message(user_id, message)
-        
-        # Only execute direct task requests, not questions
-        # "帮我下载" = task, "下载到哪里了？" = question
-        task_indicators = ["帮我", "帮我做", "帮我生成", "帮我编写", "帮我创建", "帮我执行", "帮我下载", "生成", "编写", "创建", "执行", "做", "跑"]
-        if any(k in msg_lower for k in task_indicators):
-            return await self._execute_task_from_message(user_id, message)
+        # Let LLM decide if this is a task or question
+        return await self._execute_task_from_message(user_id, message)
         
         # Default - use LLM to respond
         prompt = ("用户: " + message + "  请简洁回应用户。")
@@ -635,23 +628,48 @@ class OrchestratorAgent:
 
     async def _execute_task_from_message(self, user_id: str, message: str) -> str:
         """
-        Execute a task based on user message.
-        Only actual action requests are executed, not questions.
+        Use LLM to decide if this is a task to execute or a question to answer.
         """
-        msg_lower = message.lower()
+        context = self._build_context(user_id)
         
-        # If it's just a question, don't execute - answer it
-        if any(k in msg_lower for k in ["哪里", "到哪", "什么", "是不是", "吗", "?"]):
-            # This is a question, not a task - answer it
-            context = self._build_context(user_id)
-            return "下载会保存到当前工作目录: " + context.split("当前工作目录:")[1].split("\n")[0] if "当前工作目录:" in context else "请先设置工作目录"
+        prompt = (
+            "用户消息: " + message + "\n\n"
+            "当前环境: " + context + "\n\n"
+            "判断用户意图：\n"
+            "1. 如果用户要执行某个操作/任务（下载/分析/生成/创建/执行）-> 返回 'TASK: 具体任务描述'\n"
+            "2. 如果用户只是在问问题/确认信息 -> 返回 'QUESTION: 问题内容'\n"
+            "3. 如果不确定 -> 返回 'QUESTION'\n\n"
+            "例如：\n"
+            "- '帮我下载文件' -> TASK: 下载文件\n"
+            "- '下载到哪里了？' -> QUESTION: 询问下载路径\n"
+            "- '帮我做差异分析' -> TASK: 执行差异分析\n"
+            "- '当前工作目录是什么' -> QUESTION: 询问工作目录"
+        )
         
-        # Route to analyze handler for actual task execution
-        params = {
-            "question": message,
-            "analysis_type": self._detect_analysis_type(msg_lower) or "general"
-        }
-        return await self._handle_analyze(params, user_id)
+        response = await self._call_llm(prompt)
+        
+        if not response:
+            return "抱歉，无法理解你的意图。请再说一次。"
+        
+        response = response.strip().upper()
+        
+        if response.startswith("TASK:"):
+            # It's a task - execute it
+            task_desc = response[5:].strip()
+            params = {
+                "question": task_desc,
+                "analysis_type": self._detect_analysis_type(task_desc.lower()) or "general"
+            }
+            return await self._handle_analyze(params, user_id)
+        else:
+            # It's a question - answer it directly
+            # Extract what they're asking about
+            msg_lower = message.lower()
+            if any(k in msg_lower for k in ["工作目录", "目录", "路径", "哪里", "到哪"]):
+                if context and "当前工作目录" in context:
+                    workdir = context.split("当前工作目录:")[1].split("\n")[0].strip()
+                    return "下载会保存到工作目录: " + workdir
+            return "请告诉我你想了解什么？"
 
     # ───────────────────────────────────────────────────────────────
     # Executor Event Handler
