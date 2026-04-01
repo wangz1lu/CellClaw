@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  orchestrator:
+    build: ../../
+    command: python main_multi.py orchestrator
+    env_file:
+      - ../../.env.multi
+    volumes:
+      - /tmp/cellclaw_state:/tmp/cellclaw_state
+    restart: unless-stopped
+
+  planner:
+    build: ../../
+    command: python main_multi.py planner
+    env_file:
+      - ../../.env.multi
+    volumes:
+      - /tmp/cellclaw_state:/tmp/cellclaw_state
+    restart: unless-stopped
+
+  coder:
+    build: ../../
+    command: python main_multi.py coder
+    env_file:
+      - ../../.env.multi
+    volumes:
+      - /tmp/cellclaw_state:/tmp/cellclaw_state
+    restart: unless-stopped
+
+  reviewer:
+    build: ../../
+    command: python main_multi.py reviewer
+    env_file:
+      - ../../.env.multi
+    volumes:
+      - /tmp/cellclaw_state:/tmp/cellclaw_state
+    restart: unless-stopped
+
+  executor:
+    build: ../../
+    command: python main_multi.py executor
+    env_file:
+      - ../../.env.multi
+    volumes:
+      - /tmp/cellclaw_state:/tmp/cellclaw_state
+    restart: unless-stopped

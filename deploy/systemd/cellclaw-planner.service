@@ -1,0 +1,18 @@
+[Unit]
+Description=CellClaw Planner Bot
+After=network.target
+
+[Service]
+Type=simple
+User=wangzilu
+WorkingDirectory=/path/to/CellClaw
+Environment="CELLCRAW_STATE_DIR=/tmp/cellclaw_state"
+EnvironmentFile=/path/to/CellClaw/.env.multi
+ExecStart=/path/to/CellClaw/venv/bin/python /path/to/CellClaw/main_multi.py planner
+Restart=always
+RestartSec=10
+StandardOutput=append:/var/log/cellclaw/planner.log
+StandardError=append:/var/log/cellclaw/planner.error.log
+
+[Install]
+WantedBy=multi-user.target

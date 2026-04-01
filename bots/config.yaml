@@ -1,0 +1,54 @@
+# CellClaw Multi-Bot Configuration
+# Copy this to .env.multi and fill in your tokens
+
+# ===========================================
+# BOT TOKENS (Required)
+# ===========================================
+# Get these from https://discord.com/developers/applications
+# Each bot needs its own Discord Application
+
+CELLCRAW_ORCHESTRATOR_TOKEN=your_orchestrator_bot_token_here
+CELLCRAW_PLANNER_TOKEN=your_planner_bot_token_here
+CELLCRAW_CODER_TOKEN=your_coder_bot_token_here
+CELLCRAW_REVIEWER_TOKEN=your_reviewer_bot_token_here
+CELLCRAW_EXECUTOR_TOKEN=your_executor_bot_token_here
+
+# ===========================================
+# LLM SETTINGS (Required for code generation)
+# ===========================================
+OMICS_LLM_API_KEY=sk-your-api-key-here
+OMICS_LLM_BASE_URL=https://api.deepseek.com/v1
+OMICS_LLM_MODEL=deepseek-chat
+
+# ===========================================
+# SSH SETTINGS (Required for Executor)
+# ===========================================
+CELLCRAW_EXECUTOR_SSH_HOST=119.78.67.14
+CELLCRAW_EXECUTOR_SSH_PORT=50000
+CELLCRAW_EXECUTOR_SSH_USER=wangzilu
+CELLCRAW_EXECUTOR_SSH_WORKDIR=/sdd/bgi/wangzilu/04.OmicsClaw
+CELLCRAW_EXECUTOR_CONDA_ENV=r_go_env
+
+# ===========================================
+# STATE MANAGEMENT
+# ===========================================
+# Directory for shared task state (file-based)
+CELLCRAW_STATE_DIR=/tmp/cellclaw_state
+
+# ===========================================
+# BOT BEHAVIOR
+# ===========================================
+# Delay between messages (rate limiting)
+CELLCRAW_MESSAGE_DELAY=1.0
+
+# Log level: DEBUG, INFO, WARNING, ERROR
+CELLCRAW_LOG_LEVEL=INFO
+
+# ===========================================
+# DISCORD GUILD SETTINGS (Optional)
+# ===========================================
+# Default channel for task notifications
+CELLCRAW_DEFAULT_CHANNEL=
+
+# Leader's Discord ID (for notifications)
+CELLCRAW_LEADER_ID=

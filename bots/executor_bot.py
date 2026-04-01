@@ -13,6 +13,8 @@ import re
 import secrets
 from typing import Optional
 
+import asyncssh
+
 from bots.base import BaseBot, BotConfig
 from shared.protocol import MessageType, Message, AgentRole, SubTaskStatus
 from shared.state_manager import StateManager
@@ -20,7 +22,7 @@ from shared.state_manager import StateManager
 
 class ExecutorBot(BaseBot):
     """
-    Executor Bot - executes tasks on remote servers.
+    Executor Bot - executes tasks on remote servers via SSH.
     
     Responsibilities:
     - Receive approved code from orchestrator
@@ -35,14 +37,24 @@ class ExecutorBot(BaseBot):
         self.config.role = AgentRole.EXECUTOR
         self.logger.info("ExecutorBot initialized")
         
-        # SSH manager (lazy loaded)
-        self._ssh = None
+        # SSH connection pool
+        self._ssh_conn = None
     
     def _register_default_handlers(self):
         """Register message handlers."""
         self._handlers[MessageType.SUBTASK_REQUEST] = self.handle_execute_request
         self._handlers[MessageType.EXECUTE_REQUEST] = self.handle_execute_request
         self._handlers[MessageType.PING] = self.handle_ping
+    
+    async def _get_ssh_connection(self):
+        """Get or create SSH connection."""
+        if self._ssh_conn is None or self._ssh_conn.is_closed():
+            self._ssh_conn = await asyncssh.connect(
+                host=self.config.ssh_host,
+                port=self.config.ssh_port,
+                username=self.config.ssh_user,
+            )
+        return self._ssh_conn
     
     async def handle_execute_request(self, msg: Message) -> str:
         """Handle execution request."""
@@ -73,13 +85,11 @@ class ExecutorBot(BaseBot):
             
             language = msg.payload.get("language", "R") if msg.payload else (task.language or "R")
             
-            # Submit job
-            job_id = await self._submit_job(
-                user_id=task.leader_id,
+            # Submit job via SSH
+            job_id = await self._submit_job_via_ssh(
                 code=code,
                 language=language,
                 description=task.description,
-                channel_id=task.channel_id
             )
             
             # Save job info
@@ -89,7 +99,7 @@ class ExecutorBot(BaseBot):
                 status="executing"
             )
             
-            # Mark executor done (job submitted to background)
+            # Mark executor subtask done
             self.state.update_subtask(
                 task_id, "executor",
                 status=SubTaskStatus.DONE,
@@ -125,15 +135,13 @@ class ExecutorBot(BaseBot):
         """Handle ping."""
         return f"pong | executor | {self.config.user_id}"
     
-    async def _submit_job(
+    async def _submit_job_via_ssh(
         self,
-        user_id: str,
         code: str,
         language: str,
-        description: str,
-        channel_id: str
+        description: str
     ) -> str:
-        """Submit job to SSH server."""
+        """Submit job to remote server via SSH."""
         
         # Generate job ID
         job_id = f"job_{secrets.token_hex(4)}"
@@ -147,32 +155,59 @@ class ExecutorBot(BaseBot):
         
         # Log file
         log_file = f"{workdir}/{job_id}.log"
+        pid_file = f"{workdir}/{job_id}.pid"
         
-        # Create script content
-        script_content = code
+        # Get SSH connection
+        conn = await self._get_ssh_connection()
         
-        # For now, just save locally and return job ID
-        # In production, would use SSHManager
-        local_dir = "/tmp/cellclaw_scripts"
-        os.makedirs(local_dir, exist_ok=True)
+        # Create workdir if needed
+        await conn.run(f"mkdir -p {workdir}", check=True)
         
-        script_path = os.path.join(local_dir, script_name)
-        with open(script_path, 'w') as f:
-            f.write(script_content)
+        # Write script to remote
+        async with conn.open_sftp() as sftp:
+            script_path = f"{workdir}/{script_name}"
+            await sftp.write_file(script_path, code)
         
-        self.logger.info(f"Script saved to {script_path}")
+        # Submit with nohup, save PID
+        run_cmd = f"cd {workdir} && nohup bash {script_name} > {log_file} 2>&1 & echo $! > {pid_file} && cat {pid_file}"
         
-        # TODO: Actually execute via SSH
-        # For now, simulate job submission
-        # In real implementation:
-        # job = await self._ssh.submit_analysis(
-        #     discord_user_id=user_id,
-        #     script=code,
-        #     script_ext=ext,
-        #     description=description
-        # )
+        result = await conn.run(run_cmd, check=True)
+        pid = result.stdout.strip()
+        
+        self.logger.info(f"Job {job_id} submitted with PID {pid}")
         
         return job_id
+    
+    async def _check_job_status(self, job_id: str) -> dict:
+        """Check job status on remote server."""
+        try:
+            conn = await self._get_ssh_connection()
+            workdir = self.config.ssh_workdir or "/tmp/cellclaw_jobs"
+            log_file = f"{workdir}/{job_id}.log"
+            pid_file = f"{workdir}/{job_id}.pid"
+            
+            # Check if process is still running
+            check_cmd = f"ps -p $(cat {pid_file} 2>/dev/null) > /dev/null 2>&1 && echo 'running' || echo 'done'"
+            result = await conn.run(check_cmd, check=False)
+            
+            is_running = "running" in result.stdout
+            is_done = not is_running
+            
+            # Read last lines of log for status
+            tail_cmd = f"tail -10 {log_file} 2>/dev/null || echo 'No log yet'"
+            log_result = await conn.run(tail_cmd, check=False)
+            last_log = log_result.stdout
+            
+            return {
+                "is_running": is_running,
+                "is_done": is_done,
+                "is_success": "error" not in last_log.lower() and "failed" not in last_log.lower(),
+                "log_tail": last_log
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Failed to check job status: {e}")
+            return {"is_done": True, "is_success": False, "error": str(e)}
     
     async def _monitor_job(
         self,
@@ -189,23 +224,38 @@ class ExecutorBot(BaseBot):
         for i in range(max_polls):
             await asyncio.sleep(poll_interval)
             
-            # Check job status (would call SSH API in production)
-            # For now, simulate completion after a few polls
-            if i >= 2:  # Simulate for demo
-                # Job completed successfully
-                self.state.update_task(
-                    task_id,
-                    status="done",
-                    completed_at=self._get_timestamp()
-                )
-                
-                await self.send_message(
-                    channel_id,
-                    f"✅ **Task Completed!**\n"
-                    f"Task ID: `{task_id}`\n"
-                    f"Job ID: `{job_id}`\n\n"
-                    f"Results saved to workdir."
-                )
+            # Check job status
+            status = await self._check_job_status(job_id)
+            
+            if status.get("is_done"):
+                if status.get("is_success"):
+                    self.state.update_task(
+                        task_id,
+                        status="done",
+                        completed_at=self._get_timestamp()
+                    )
+                    
+                    await self.send_message(
+                        channel_id,
+                        f"✅ **Task Completed!**\n"
+                        f"Task ID: `{task_id}`\n"
+                        f"Job ID: `{job_id}`\n\n"
+                        f"Results saved to workdir."
+                    )
+                else:
+                    self.state.update_task(
+                        task_id,
+                        status="failed",
+                        error_message=status.get("error", "Job failed")
+                    )
+                    
+                    await self.send_message(
+                        channel_id,
+                        f"❌ **Task Failed**\n"
+                        f"Task ID: `{task_id}`\n"
+                        f"Job ID: `{job_id}`\n\n"
+                        f"Check logs for details."
+                    )
                 return
             
             # Log progress
@@ -239,6 +289,11 @@ class ExecutorBot(BaseBot):
                 return match.group(1)
         
         return None
+    
+    async def close(self):
+        """Close SSH connection."""
+        if self._ssh_conn and not self._ssh_conn.is_closed():
+            self._ssh_conn.close()
 
 
 def create_executor_bot() -> ExecutorBot:
