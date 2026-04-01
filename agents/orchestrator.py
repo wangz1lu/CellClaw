@@ -488,8 +488,11 @@ class OrchestratorAgent:
         
         # Step 2-3: Coder → Reviewer loop
         max_iterations = 3
+        script_path = None
+        code_result = None
+        
         for i in range(max_iterations):
-            # Coder generates and writes to SSH
+            # Coder generates
             code_result = await self.coder.generate(
                 task_description=task,
                 skill_id=skill_needed,
@@ -498,22 +501,25 @@ class OrchestratorAgent:
             
             # Save to SSH workdir
             script_path = await self._save_script_to_ssh(user_id, code_result.code, code_result.language, task)
-            await self._notify_progress(f"代码已生成 ({i+1})", f"脚本: {script_path}")
+            await self._notify_progress(f"[Coder] 代码已生成 ({i+1}/3)", f"脚本: {script_path}")
             
-            # Reviewer reads from SSH and checks
-            review_result = await self.reviewer.check_from_ssh(script_path, code_result.language)
+            # Reviewer checks
+            review_result = await self.reviewer.check(code_result.code, code_result.language)
             
             if review_result.can_execute:
-                # Review passed
-                await self._notify_progress("代码审查通过", f"脚本位置: {script_path}")
+                await self._notify_progress("[Reviewer] 审查通过", f"代码可执行")
                 break
             else:
-                # Need revision
-                issues = "\n".join([f"- [{i.severity}] {i.message}" for i in review_result.issues])
-                await self._notify_progress(f"需要修改 ({i+1})", issues)
-                code_result.code = await self.reviewer.fix_from_ssh(script_path, review_result.issues)
-                # Coder rewrites
+                issues = "\n".join([f"- [{issue.severity}] {issue.message}" for issue in review_result.issues])
+                await self._notify_progress(f"[Reviewer] 需要修改 ({i+1}/3)", issues)
+                # Ask Coder to fix
+                code_result.code = await self.reviewer.fix(code_result.code, review_result.issues)
+                # Save fixed version
+                script_path = await self._save_script_to_ssh(user_id, code_result.code, code_result.language, task)
                 continue
+        
+        if not code_result or not script_path:
+            return "代码生成失败"
         
         # Step 4: Executor submits with nohup
         job_id = await self.executor.submit(
