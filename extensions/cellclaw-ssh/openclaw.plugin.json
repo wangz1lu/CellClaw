@@ -1,0 +1,35 @@
+{
+  "id": "cellclaw-ssh",
+  "enabledByDefault": true,
+  "name": "CellClaw SSH Layer",
+  "description": "SSH connection management and remote command execution for CellClaw",
+  "skills": [],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "servers": {
+        "type": "object",
+        "description": "Pre-configured SSH servers",
+        "additionalProperties": {
+          "type": "object",
+          "properties": {
+            "host": { "type": "string" },
+            "port": { "type": "number", "default": 22 },
+            "username": { "type": "string" },
+            "identityKey": { "type": "string" }
+          },
+          "required": ["host", "username"]
+        }
+      },
+      "connectionTimeout": {
+        "type": "number",
+        "default": 30000
+      },
+      "defaultCwd": {
+        "type": "string"
+      }
+    }
+  },
+  "uiHints": {}
+}
