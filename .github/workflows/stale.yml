@@ -32,7 +32,7 @@ jobs:
       - name: Mark stale issues and pull requests (primary)
         id: stale-primary
         continue-on-error: true
-        uses: actions/stale@v10
+        uses: actions/stale@v10.2.0
         with:
           repo-token: ${{ steps.app-token.outputs.token || steps.app-token-fallback.outputs.token }}
           days-before-issue-stale: 7
@@ -88,7 +88,7 @@ jobs:
             }
       - name: Mark stale issues and pull requests (fallback)
         if: (steps.stale-primary.outcome == 'failure' || steps.stale-state.outputs.has_state == 'true') && steps.app-token-fallback.outputs.token != ''
-        uses: actions/stale@v10
+        uses: actions/stale@v10.2.0
         with:
           repo-token: ${{ steps.app-token-fallback.outputs.token }}
           days-before-issue-stale: 7
